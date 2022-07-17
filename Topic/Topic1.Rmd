@@ -70,3 +70,754 @@ pacman::p_load(tidyverse, lubridate, zoo,
     + [**feasts**](https://feasts.tidyverts.org/) provides a collection of tools for the analysis of time series data. The package name is an acronym comprising of its key features: Feature Extraction And Statistics for Time Series.
 + [**trelliscopejs**](https://hafen.github.io/trelliscopejs/index.html) is an interface for creating Trelliscope displays in R environment.
 ]
+
+---
+## Importing the data
+
+.pull-left[
+First, `read_csv()` of **readr** package is used to import *visitor_arrivals_by_air.csv* file into R environment.  The imported file is saved an tibble object called *ts_data*. 
+
+```{r}
+ts_data <- read_csv(
+  "data/visitor_arrivals_by_air.csv")
+```
+]
+
+--
+.pull-right[
+In the code chunk below, `dmy()` of **lubridate** package is used to convert data type of Month-Year field from Character to Date.
+
+```{r}
+ts_data$`Month-Year` <- dmy(
+  ts_data$`Month-Year`)
+```
+]
+
+---
+### Conventional base `ts` object versus `tibble` object 
+tibble object
+
+```{r}
+ts_data
+```
+
+---
+### Conventional base `ts` object versus `tibble` object 
+ts object
+
+```{r}
+ts_data_ts <- ts(ts_data)       
+head(ts_data_ts)
+```
+
+---
+### Converting `tibble` object to `tsibble` object 
+.pull-left[
+Built on top of the tibble, a **tsibble** (or tbl_ts) is a data- and model-oriented object. Compared to the conventional time series objects in R, for example ts, zoo, and xts, the tsibble preserves time indices as the essential data column and makes heterogeneous data structures possible. Beyond the tibble-like representation, key comprised of single or multiple variables is introduced to uniquely identify observational units over time (index).
+]
+
+.pull-right[
+The code chunk below converting ts_data from tibble object into tsibble object by using [`as_tsibble()`](https://tsibble.tidyverts.org/reference/as-tsibble.html) of **tsibble** R package. 
+
+```{r}
+ts_tsibble <- ts_data %>%
+  mutate(Month = yearmonth(`Month-Year`)) %>%
+  as_tsibble(index = `Month`)
+```
+
+What can we learn from the code chunk above?
++ [`mutate()`]() of **dplyr** package is used to derive a new field by transforming the data values in Month-Year field into month-year format. The transformation is performed by using [`yearmonth()`](https://tsibble.tidyverts.org/reference/year-month.html) of **tsibble** package.
++ [`as_tsibble()`](https://tsibble.tidyverts.org/reference/as-tibble.html) is used to convert the tibble data frame into tsibble data frame.
+
+]
+
+---
+### tsibble object
+
+```{r}
+ts_tsibble
+```
+
+---
+## Visualising Time-series Data
+
+.pull-left[
+In order to visualise the time-series data effectively, we need to organise the data frame from wide to long format by using [`pivot_longer()`](https://tidyr.tidyverse.org/reference/pivot_longer.html) of **tidyr** package as shown below.
+
+```{r}
+ts_longer <- ts_data %>%
+  pivot_longer(cols = c(2:34),
+               names_to = "Country",
+               values_to = "Arrivals")
+
+```
+]
+
+---
+### Visualising single time-series: ggplot2 methods
+
+.pull-left[
+```{r eval=FALSE}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  ggplot(aes(x = `Month-Year`, 
+             y = Arrivals))+
+  geom_line(size = 1)
+```
+
+What can we learn from the code chunk above?
+
++ [`filter()`](https://dplyr.tidyverse.org/reference/filter.html) of [**dplyr**](https://dplyr.tidyverse.org/index.html) package is used to select records belong to Vietnam.
++ [`geom_line()`](https://ggplot2.tidyverse.org/reference/geom_path.html) of [**ggplot2**](https://ggplot2.tidyverse.org/index.html) package is used to plot the time-series line graph.
+]
+
+.pull-right[
+
+```{r echo=FALSE, fig.height=6}
+ts_longer %>%
+  filter(Country == "United Kingdom") %>%
+  ggplot(aes(x = `Month-Year`, 
+             y = Arrivals))+
+  geom_line(size = 1)
+```
+]
+
+---
+### Visualising single time-series: timetk methods
+
+.pull-left[
+In the code chunk below, [`plot_time_series()`](https://business-science.github.io/timetk/reference/plot_time_series.html) of **timetk** package is used to plot the time series line graph.
+
+
+```{r eval=FALSE}
+ts_longer %>%
+  filter(Country == "United Kingdom") %>%
+  plot_time_series(`Month-Year`, Arrivals,
+                   .line_size = 0.4,
+                   .smooth_size = 0.4,
+                   .interactive = TRUE,
+                   .plotly_slider = TRUE)
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=5}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_time_series(`Month-Year`, Arrivals,
+                   .line_size = 0.4,
+                   .smooth_size = 0.4,
+                   .interactive = TRUE,
+                   .plotly_slider = TRUE)
+```
+]
+
+---
+### Plotting time-series data: ggplot2 methods
+
+```{r}
+ggplot(data = ts_longer, 
+       aes(x = `Month-Year`, 
+           y = Arrivals,
+           color = Country))+
+  geom_line(size = 0.5)
+```
+
+---
+### Visualising multiple time-series with trellis plot: ggplot2 methods
+
+.pull-left[
+In order to provide effective comparison, [`facet_wrap()`](https://ggplot2.tidyverse.org/reference/facet_wrap.html) of **ggplot2** package is used to create small multiple line graph also known as trellis plot.
+
+```{r eval=FALSE}
+ggplot(data = ts_longer, 
+       aes(x = `Month-Year`, 
+           y = Arrivals))+
+  geom_line(size = 0.5) +
+  facet_wrap(~ Country,
+             scales = "free_y") +
+  theme_bw()
+```
+]
+
+---
+### Visualising multiple time-series with trellis plot: ggplot2 methods
+
+```{r echo=FALSE, fig.height=4.5}
+ggplot(data = ts_longer, 
+       aes(x = `Month-Year`, 
+           y = Arrivals))+
+  geom_line(size = 0.5) +
+  facet_wrap(~ Country,
+             scales = "free_y") +
+  theme_bw()
+```
+
+.pull-left[
+In order to visualise the time-series data effectively, we need to organise the data frame from wide to long format by using [`pivot_longer()`](https://tidyr.tidyverse.org/reference/pivot_longer.html) of **tidyr** package as shown below.
+
+```{r}
+tsibble_longer <- ts_tsibble %>%
+  pivot_longer(cols = c(2:34),
+               names_to = "Country",
+               values_to = "Arrivals")
+
+```
+]
+
+---
+### Visualising multiple time-series with interactive trellis plot: timetk methods 
+
+.pull-left[
+In the code chunk below, `plot_time_series()` of timetk package is used to prepare the trellis line graphs. 
+
+```{r eval=FALSE}
+ts_longer %>%
+  group_by(Country) %>%
+  plot_time_series(
+    `Month-Year`, Arrivals,
+    .line_size = 0.4,
+    .facet_ncol = 5, 
+    .facet_scales = "free_y",
+    .interactive = TRUE,
+    .smooth_size = 0.4)
+```
+]
+
+---
+### Visualising multiple time-series with interactive trellis plot: timetk methods 
+
+```{r echo=FALSE, fig.width=10, fig.height=8}
+ts_longer %>%
+  group_by(Country) %>%
+  plot_time_series(
+    `Month-Year`, Arrivals,
+    .line_size = 0.4,
+    .facet_ncol = 5, 
+    .facet_scales = "free_y",
+    .interactive = TRUE,
+    .smooth_size = 0.4)
+```
+
+---
+### Visualising multiple time-series with interactive trellis plot: timetk methods
+
+.pull-left[
+Beside using **plotly R** to plot interactive trellis graphs, timetk also support [**trelliscopejs**](https://hafen.github.io/trelliscopejs/index.html).
+
+```{r eval=FALSE}
+ts_longer %>%
+  group_by(Country) %>%
+  plot_time_series(
+    `Month-Year`, Arrivals,
+    .line_size = 0.4,
+    .facet_ncol = 5,
+    .facet_nrow = 2,
+    .facet_scales = "free_y",
+    .interactive = TRUE,
+    .smooth_size = 0.4,
+    .trelliscope = TRUE,        #<<
+    .trelliscope_params = list( #<<
+      width = 600,              #<<
+      height = 700,             #<<
+      path= "trellis/")         #<<
+    )
+```
+]
+
+---
+### Visualising multiple time-series with interactive trellis plot: timetk methods
+
+```{r echo=FALSE, fig.height=5}
+ts_longer %>%
+  group_by(Country) %>%
+  plot_time_series(
+    `Month-Year`, Arrivals,
+    .line_size = 0.4,
+    .facet_ncol = 5,
+    .facet_nrow = 2,
+    .facet_scales = "free_y",
+    .interactive = TRUE,
+    .smooth_size = 0.4,
+    .trelliscope = TRUE,
+    .trelliscope_params = list(
+      width = 600,
+      height = 700,
+      path= "trellis/")
+    )
+```
+
+---
+## Visual Analysis of Seasonality
+
+.large[
++ Time series datasets can contain a seasonal component.
+
++ This is a cycle that repeats over time, such as monthly or yearly. This repeating cycle may obscure the signal that we wish to model when forecasting, and in turn may provide a strong signal to our predictive models.
+
+In this section, you will discover how to identify seasonality in time series data by using functions provides by **timetk** and **feasts** packages.
+]
+
+---
+### Visual Analysis of Seasonality: timetk methods
+
+.pull-left[
+In the code chunk below, [`plot_seasonal_diagnostics()`](https://business-science.github.io/timetk/reference/plot_seasonal_diagnostics.html) of **timetk** package is used to detect seasonal patterns visually.
+
+```{r eval=FALSE}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_seasonal_diagnostics(
+    `Month-Year`, Arrivals, 
+    .interactive = TRUE)
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=7.5}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_seasonal_diagnostics(
+    `Month-Year`, Arrivals, 
+    .interactive = TRUE)
+```
+]
+
+---
+### Visual Analysis of Seasonality: timetk methods
+
+[`plot_seasonal_diagnostics()`](https://business-science.github.io/timetk/reference/plot_seasonal_diagnostics.html) of **timetk** package can also be used to detect seasonal patterns of multiple time series visually.
+
+```{r echo=FALSE, fig.height=4}
+ts_longer %>%
+  filter(Country == "Italy" |
+         Country == "Germany" |
+         Country == "United Kingdom" |
+         Country == "New Zealand") %>%
+    group_by(Country) %>%
+    plot_seasonal_diagnostics(
+      `Month-Year`, Arrivals,
+      .feature_set = "month.lbl",
+      .interactive = FALSE)
+```
+
+---
+### Visual Analysis of Seasonality: timetk methods
+
+.pull-left[
+Below is the code chunk used to prepare the seasonal detection plots on previous page.
+
+```{r echo=FALSE, eval=FALSE}
+ts_longer %>%
+  filter(Country == "Italy" |
+         Country == "Germany" |
+         Country == "United Kingdom" |
+         Country == "New Zealand") %>%
+    group_by(Country) %>%
+    plot_seasonal_diagnostics(
+      `Month-Year`, Arrivals,
+      .feature_set = "month.lbl",
+      .interactive = FALSE)
+```
+]
+
+---
+### Visual Analysis of Seasonality: feasts methods
+
+.pull-left[
+A season plot is created by using [`gg_season()`](https://feasts.tidyverts.org/reference/gg_season.html) of **feasts** package. 
+
+```{r eval=FALSE}
+tsibble_longer %>%
+  filter(Country == "Italy" |
+         Country == "Vietnam" |
+         Country == "United Kingdom" |
+         Country == "Germany") %>% 
+  gg_season(Arrivals)
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=9}
+tsibble_longer %>%
+  filter(Country == "Italy" |
+         Country == "Vietnam" |
+         Country == "United Kingdom" |
+         Country == "Germany") %>% 
+  gg_season(Arrivals)
+```
+]
+
+---
+### Visual Analysis of Seasonality: feasts methods
+
+.pull-left[
+
+```{r fig.height=6}
+tsibble_longer %>%
+  filter(Country == "Vietnam" |
+         Country == "Italy") %>% 
+  autoplot(Arrivals) + 
+  facet_grid(Country ~ ., scales = "free_y")
+```
+]
+
+--
+.pull-right[
+Cycle plot using [`gg_subseries()`](https://feasts.tidyverts.org/reference/gg_subseries.html) of feasts package.
+
+```{r fig.height=6}
+tsibble_longer %>%
+  filter(Country == "Vietnam" |
+         Country == "Italy") %>% 
+  gg_subseries(Arrivals)
+
+```
+]
+
+---
+## Time series decomposition
+
+Time series decomposition allows us to isolate structural components such as trend and seasonality from the time-series data. 
+
+![:scale 45%](img/image1.jpg)
+
+---
+### Time series decomposition: timetk methods
+
+.pull-left[
+In the code chunk below, [`plot_acf_diagnostics()`](https://business-science.github.io/timetk/reference/plot_acf_diagnostics.html) is used to decompose the visitor arrival from Vietnam by air data.  The function Return the ACF and PACF of a target and optionally CCF's of one or more lagged predictors in interactive plotly plots. 
+
+```{r eval=FALSE}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_acf_diagnostics(
+    `Month-Year`, Arrivals,
+    .lags = "30 months",
+    .interactive = TRUE
+    )
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=8}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_acf_diagnostics(
+    `Month-Year`, Arrivals,
+    .lags = "30 months",
+    .interactive = TRUE
+    )
+```
+]
+
+---
+### Multiple Time series decomposition: timetk methods
+
+Code chunk below is used to prepare a trellis plot of ACFs for visitor arrivals from Vietnam, Italy, United Kingdom and China. 
+
+```{r echo=FALSE}
+ts_longer %>%
+  filter(`Country` == "Vietnam" |
+         `Country` == "Italy" |
+         `Country` == "United Kingdom" |
+         `Country` == "China") %>%
+  group_by(Country) %>%
+  plot_acf_diagnostics(
+    `Month-Year`, Arrivals,
+    .lags = "30 months",
+    .interactive = TRUE
+    )
+```
+
+---
+### Time series decomposition: feasts methods
+
+In **feasts** package, time series decomposition is supported by [`ACF()`](https://feasts.tidyverts.org/reference/ACF.html), `PACF()`, `CCF()`, [`feat_acf()`](https://feasts.tidyverts.org/reference/feat_acf.html), and [`feat_pacf()`](https://feasts.tidyverts.org/reference/feat_acf.html).  The output can then be plotted by using `autoplot()` of **feasts** package.  
+
+.pull-left[
+```{r fig.height=3}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  ACF(Arrivals) %>% 
+  autoplot()
+```
+]
+
+.pull-right[
+```{r fig.height=3}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  PACF(Arrivals) %>% 
+  autoplot()
+```
+]
+
+---
+### Time series decomposition: feasts methods
+
+Code chunk below is used to prepare a trellis plot of ACFs for visitor arrivals from Vietnam, Italy, United Kingdom and China. 
+
+.pull-left[
+
+```{r echo=FALSE, fig.height=5}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam" |
+         `Country` == "Italy" |
+         `Country` == "United Kingdom" |
+         `Country` == "China") %>%
+  ACF(Arrivals) %>%
+  autoplot()
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=5}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam" |
+         `Country` == "Italy" |
+         `Country` == "United Kingdom" |
+         `Country` == "China") %>%
+  PACF(Arrivals) %>%
+  autoplot()
+```
+]
+
+---
+### Composite plot of time series: feasts methods
+
+.pull-left[
+One of the interesting function of feasts package time series decomposition is [`gg_tsdisplay()`](https://feasts.tidyverts.org/reference/gg_tsdisplay.html). It provides a composite plot by showing the original line graph on the top pane follow by the ACF on the left and seasonal plot on the right.
+
+```{r eval=FALSE}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  gg_tsdisplay(Arrivals)
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=7}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  gg_tsdisplay(Arrivals)
+```
+
+]
+
+---
+## STL Diagnostics
+
+STL is an acronym for “Seasonal and Trend decomposition using Loess”, while Loess is a method for estimating nonlinear relationships. The STL method was developed by R. B. Cleveland, Cleveland, McRae, & Terpenning (1990).
+
+STL has several advantages over the classical, SEATS and X11 decomposition methods:
+
++ Unlike SEATS and X11, STL will handle any type of seasonality, not only monthly and quarterly data.
++ The seasonal component is allowed to change over time, and the rate of change can be controlled by the user.
++ The smoothness of the trend-cycle can also be controlled by the user.
++ It can be robust to outliers (i.e., the user can specify a robust decomposition), so that occasional unusual observations will not affect the estimates of the trend-cycle and seasonal components. They will, however, affect the remainder component.
+
+---
+### STL Diagnostics: timetk methods
+
+.pull-left[
+In the code chunk below, [`plot_stl_diagnostics()`](https://business-science.github.io/timetk/reference/plot_stl_diagnostics.html) of timetk package is used to perform STL diagnostics.
+
+```{r eval=FALSE}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_stl_diagnostics(
+    `Month-Year`, Arrivals,
+    .frequency = "auto", 
+    .trend = "auto",
+    .feature_set = c(
+      "observed", "season", 
+      "trend", "remainder"),
+    .interactive = TRUE)
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=7.5}
+ts_longer %>%
+  filter(Country == "Vietnam") %>%
+  plot_stl_diagnostics(
+    `Month-Year`, Arrivals,
+    .frequency = "auto", 
+    .trend = "auto",
+    .feature_set = c(
+      "observed", "season", 
+      "trend", "remainder"),
+    .interactive = TRUE)
+```
+]
+
+---
+### STL Diagnostics: feasts methods
+
+.pull-left[
+```{r eval=FALSE}
+tsaPlot <- tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(stl = STL(Arrivals)) %>%
+  components() %>%
+  autoplot()
+```
+
+The grey bars to the left of each panel show the relative scales of the components. Each grey bar represents the same length but because the plots are on different scales, the bars vary in size. The large grey bar in the bottom panel shows that the variation in the remainder component is smallest compared to the variation in the data. If we shrank the bottom three panels until their bars became the same size as that in the data panel, then all the panels would be on the same scale.
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=9}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(stl = STL(Arrivals)) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+---
+### Classical Decomposition: feasts methods
+
+.pull-left[
+```{r eval=FALSE}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(
+    classical_decomposition(
+      Arrivals, type = "additive")) %>%
+  components() %>%
+  autoplot()
+```
+
+
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=9}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(
+    classical_decomposition(
+      Arrivals, type = "additive")) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+---
+### X11 Decomposition: feasts methods
+
+.pull-left[
+The X-11 method originated in the US Census Bureau and was further developed by Statistics Canada. It is based on classical decomposition, but includes many extra steps and features in order to overcome the drawbacks of classical decomposition that were discussed in the previous section. The process is entirely automatic and tends to be highly robust to outliers and level shifts in the time series. The details of the X-11 method are described in Dagum & Bianconcini (2016).
+
+```{r eval=FALSE}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(x11 = X_13ARIMA_SEATS(
+    Arrivals ~ x11())) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=9}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(x11 = X_13ARIMA_SEATS(
+    Arrivals ~ x11())) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+---
+### SEATS Decomposition: feasts methods
+
+.pull-left[
+**SEATS** stands for *Seasonal Extraction in ARIMA Time Series*. This procedure was developed at the Bank of Spain, and is now widely used by government agencies around the world. A complete discussion of the method is available in Dagum & Bianconcini (2016).
+
+```{r eval=FALSE}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(seats = X_13ARIMA_SEATS
+        (Arrivals ~ seats())) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=9}
+tsibble_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(seats = X_13ARIMA_SEATS
+        (Arrivals ~ seats())) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+---
+## A Little Bonus for the Day
+
+.pull-left[
+Step 1: Installing [`openxlsx`](https://ycphs.github.io/openxlsx/index.html) package and load it onto R environment.
+
+Step 2: Creating a workbook
+
+```{r eval=FALSE}
+wb <- createWorkbook()
+```
+
+Step 3: Creating a worksheet
+
+```{r eval=FALSE}
+addWorksheet(wb,
+             sheetName = "Time Series Analysis")
+```
+
+Step 4: Adding a plot
+
+```{r eval=FALSE}
+print(tsaPlot)
+
+wb %>% insertPlot(
+  sheet = "Time Series Analysis",
+  startCol = "G",
+  startRow = 3)
+```
+]
+
+.pull-right[
+Step 5: Adding Data Table
+
+```{r eval=FALSE}
+Vietnam <- tsibble_longer %>%
+  filter(`Country` == "Vietnam")
+
+writeDataTable(wb,
+               sheet = "Time Series Analysis",
+               x = Vietnam)
+```
+
+Step 6: Saving the Workbook
+
+```{r eval=FALSE}
+saveWorkbook(wb, "data/tsa.xlsx",
+             overwrite = TRUE)
+```
+]
+
+---
+## Reference
+
+Rob J Hyndman and George Athanasopoulos (2022) [**Forecasting: Principles and Practice (3rd ed)**](https://otexts.com/fpp3/), online version.
+
+
+```{r echo=FALSE, eval=FALSE}
+library(pagedown)
+pagedown::chrome_print("Topic1.html")
+```
