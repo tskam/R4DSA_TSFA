@@ -1,0 +1,72 @@
+---
+title: "Tidy Time-series Data Analysis"
+subtitle: ""
+author: "Dr. Kam Tin Seong<br/>Assoc. Professor of Information Systems"
+institute: "School of Computing and Information Systems,<br/>Singapore Management University"
+date: "2022-7-14 (updated: `r Sys.Date()`)"
+output:
+  xaringan::moon_reader:
+    css: [xaringan-themer.css, "css/text.css"]
+    lib_dir: libs
+    nature:
+      ratio: "16:9"
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      beforeInit: "js/macros.js"
+  beamer_presentation: default
+  slidy_presentation: default
+  pdf_document: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width=9, fig.height=3.5, fig.retina=3, out.width = "100%", cache = FALSE, echo = TRUE, eval = TRUE, message = FALSE,  warning = FALSE, hiline = TRUE)
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer)
+style_duo_accent(
+  primary_color = "#1381B0",
+  secondary_color = "#FF961C",
+  inverse_header_color = "#FFFFFF"
+)
+```
+
+# Content
+
+.large[
+By the end of this session, you will be able to:
+
+- import and wrangling time-series data by using appropriate tidyverse methods,
+- visualise and analyse time-series data,
+- calibrate time-series forecasting models by using exponential smoothing and ARIMA techniques, and
+- compare and evaluate the performance of forecasting models.
+]
+
+---
+# Getting Started
+
+.pull-left[
+For the purpose of this hands-on exercise, the following R packages will be used.
+
+```{r}
+pacman::p_load(tidyverse, lubridate, zoo, 
+               timetk, modeltime, 
+               trelliscopejs, seasonal,
+               tsibble, feasts, fable)
+```
+
++ [**lubridate**](https://lubridate.tidyverse.org/) provides a collection to functions to parse and wrangle time and date data.
++ [**zoo**](https://cran.r-project.org/web/packages/zoo/) provides an S3 class with methods for indexed totally ordered observations, such as discrete irregular time series.
++ [**timetk**](https://business-science.github.io/timetk/reference/index.html) provides methods for analysing and visualising time series data stored in tibble data frame object.
++ [**seasonal**](https://cran.r-project.org/web/packages/seasonal/index.html) provides easy-to-use interface to X-13-ARIMA-SEATS.
+]
+
+.pull-right[
++ tsibble, feasts, fable and fable.prophet are belong to [**tidyverts**](https://tidyverts.org/), a family of tidy tools for time series data handling, analysis and forecasting.
+    + [**tsibble**](https://tsibble.tidyverts.org/) provides a data infrastructure for tidy temporal data with wrangling tools. Adapting the tidy data principles, tsibble is a data- and model-oriented object.
+    + [**feasts**](https://feasts.tidyverts.org/) provides a collection of tools for the analysis of time series data. The package name is an acronym comprising of its key features: Feature Extraction And Statistics for Time Series.
++ [**trelliscopejs**](https://hafen.github.io/trelliscopejs/index.html) is an interface for creating Trelliscope displays in R environment.
+]
