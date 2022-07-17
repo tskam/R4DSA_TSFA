@@ -74,11 +74,19 @@ pacman::p_load(tidyverse, lubridate, zoo,
 ## Importing the data
 
 .pull-left[
-First, `read_csv()` of **readr** package is used to import *visitor_arrivals_by_air.csv* file into R environment.  The imported file is saved an tibble object called *ts_data*. 
+Two data sets will be used in this hands-on exercise.  They are:
+
++ *tbl_longer*: Visitor arrivals data set in tibble data frame format, and
++ *tsbl_longer*: Visitor arrivals data set in tsibble data frame format. 
+
+In the code chunk below, read_rds() of readr package is used to import both data sets into R environment.
 
 ```{r}
-ts_data <- read_csv(
-  "data/visitor_arrivals_by_air.csv")
+tbl_longer <- read_rds(
+  "data/tbl_longer.rds")
+tsbl_longer <- read_rds(
+  "data/tsbl_longer.rds"
+)
 ```
 ]
 
