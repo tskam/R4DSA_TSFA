@@ -1,0 +1,10 @@
+---
+title: "R4DSA Meetup: July 2022 Session"
+description: |
+  Welcome to the home page for **Time Series Analysis and Forecasting: Tidymodel methods**. This website shares materials I used at the meetup.
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+

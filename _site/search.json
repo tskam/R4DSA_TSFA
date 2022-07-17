@@ -1,0 +1,26 @@
+{
+  "articles": [
+    {
+      "path": "about.html",
+      "title": "R4DSA Meetup: July 2022 Session",
+      "description": "Welcome to the home page for **Time Series Analysis and Forecasting: Tidymodel methods**. This website shares materials I used at the meetup.",
+      "author": [],
+      "contents": "\r\n\r\n\r\n\r\n",
+      "last_modified": "2022-07-17T09:44:54+08:00"
+    },
+    {
+      "path": "index.html",
+      "title": "R4DSA Meetup July 2022",
+      "description": "Time Series Analysis and Forecasting: Tidy Approaches and Methods. I hope you enjoy it!\n",
+      "author": [
+        {
+          "name": "Dr. KAM Tin Seong <br/>Associate Professor of Information Systems",
+          "url": "https://www.smu.edu.sg/faculty/profile/9618/KAM-Tin-Seong"
+        }
+      ],
+      "contents": "\r\nMeet-up day: Every Saturday\r\nTime: 9-11:30pm\r\nVenue: SR B1-1, School of Computing and Information Systems\r\n\r\n\r\n\r\n",
+      "last_modified": "2022-07-17T09:46:13+08:00"
+    }
+  ],
+  "collections": []
+}

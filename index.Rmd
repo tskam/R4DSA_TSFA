@@ -1,0 +1,16 @@
+---
+title: "R4DSA Meetup July 2022"
+description: |
+  Time Series Analysis and Forecasting: Tidy Approaches and Methods. I hope you enjoy it!
+author:
+  - name: "Dr. KAM Tin Seong <br/>Associate Professor of Information Systems"
+    url: https://www.smu.edu.sg/faculty/profile/9618/KAM-Tin-Seong
+    affiliation: School of Computing and Information Systems, <br/>Singapore Management University
+site: distill::distill_website
+---
+
+* Meet-up day: Every Saturday
+* Time: 9-11:30pm
+* Venue: SR B1-1, School of Computing and Information Systems
+
+
