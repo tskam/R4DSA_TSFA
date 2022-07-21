@@ -5,6 +5,14 @@
     <meta charset="utf-8" />
     <meta name="author" content="Dr. Kam Tin Seong Assoc. Professor of Information Systems" />
     <script src="libs/header-attrs/header-attrs.js"></script>
+    <script src="libs/htmlwidgets/htmlwidgets.js"></script>
+    <script src="libs/plotly-binding/plotly.js"></script>
+    <script src="libs/typedarray/typedarray.min.js"></script>
+    <script src="libs/jquery/jquery.min.js"></script>
+    <link href="libs/crosstalk/css/crosstalk.min.css" rel="stylesheet" />
+    <script src="libs/crosstalk/js/crosstalk.min.js"></script>
+    <link href="libs/plotly-htmlwidgets-css/plotly-htmlwidgets.css" rel="stylesheet" />
+    <script src="libs/plotly-main/plotly-latest.min.js"></script>
     <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
     <link rel="stylesheet" href="css/text.css" type="text/css" />
   </head>
@@ -22,7 +30,7 @@ class: center, middle, inverse, title-slide
 ### School of Computing and Information Systems,<br/>Singapore Management University
 ]
 .date[
-### 2022-7-16 (updated: 2022-07-17)
+### 2022-7-16 (updated: 2022-07-21)
 ]
 
 ---
@@ -44,6 +52,20 @@ By the end of this session, you will be able to:
 ]
 
 ---
+## Getting to Know the Time Series Forecasting Methods
+
++ Exponential Smoothing: Based on the based on a description of the *trend* and *seasonality* in the time series data. 
++ ARIMA: Based on the *autocorrelations* in the time series data.
+
+.center[
+![:scale 50%](img/image3.jpg)
+]
+
+.small[
+Source: [*"9.10 ARIMA vs ETS"*](https://otexts.com/fpp3/arima-ets.html) of Rob J Hyndman and George Athanasopoulos (2022) **Forecasting: Principles and Practice** (3rd ed) (online version)]
+
+
+---
 # Getting Started
 
 .pull-left[
@@ -53,45 +75,1009 @@ For the purpose of this hands-on exercise, the following R packages will be used
 ```r
 pacman::p_load(tidyverse, lubridate, zoo, 
                timetk, modeltime, seasonal,
-               tsibble, feasts, fable)
+               tsibble, feasts, fable,
+               tidymodels)
 ```
 
-+ [**lubridate**](https://lubridate.tidyverse.org/) provides a collection to functions to parse and wrangle time and date data.
-+ [**zoo**](https://cran.r-project.org/web/packages/zoo/) provides an S3 class with methods for indexed totally ordered observations, such as discrete irregular time series.
-+ [**timetk**](https://business-science.github.io/timetk/reference/index.html) provides methods for analysing and visualising time series data stored in tibble data frame object.
-+ [**seasonal**](https://cran.r-project.org/web/packages/seasonal/index.html) provides easy-to-use interface to X-13-ARIMA-SEATS.
+Two R packages are added in the list, they are:
++ [**fable**](https://lubridate.tidyverse.org/) provides a collection of commonly used univariate and multivariate time series forecasting models including exponential smoothing via state space models and automatic ARIMA modelling. It is a tidy version of the popular [**forecast**](https://cran.r-project.org/web/packages/forecast/index.html) package and a member of [**tidyverts**](https://tidyverts.org/).
 ]
 
 .pull-right[
-+ tsibble, feasts, fable and fable.prophet are belong to [**tidyverts**](https://tidyverts.org/), a family of tidy tools for time series data handling, analysis and forecasting.
-    + [**tsibble**](https://tsibble.tidyverts.org/) provides a data infrastructure for tidy temporal data with wrangling tools. Adapting the tidy data principles, tsibble is a data- and model-oriented object.
-    + [**feasts**](https://feasts.tidyverts.org/) provides a collection of tools for the analysis of time series data. The package name is an acronym comprising of its key features: Feature Extraction And Statistics for Time Series.
-+ [**trelliscopejs**](https://hafen.github.io/trelliscopejs/index.html) is an interface for creating Trelliscope displays in R environment.
++ [**modeltime**](https://business-science.github.io/modeltime/index.html) a new time series forecasting package designed to speed up model evaluation, selection, and forecasting. modeltime does this by integrating the [**tidymodels**](https://www.tidymodels.org/) machine learning ecosystem of packages into a streamlined workflow for tidyverse
+forecasting. 
 ]
 
 ---
 ## Importing the data
 
 .pull-left[
-First, `read_csv()` of **readr** package is used to import *visitor_arrivals_by_air.csv* file into R environment.  The imported file is saved an tibble object called *ts_data*. 
+Two data sets will be used in this hands-on exercise.  They are:
+
++ *tbl_longer*: Visitor arrivals data set in tibble data frame format, and
++ *tsbl_longer*: Visitor arrivals data set in tsibble data frame format. 
+
+In the code chunk below, read_rds() of readr package is used to import both data sets into R environment.
 
 
 ```r
-ts_data &lt;- read_csv(
-  "data/visitor_arrivals_by_air.csv")
+tbl_longer &lt;- read_rds(
+  "data/tbl_longer.rds")
+tsbl_longer &lt;- read_rds(
+  "data/tsbl_longer.rds"
+)
 ```
 ]
 
---
+
+---
+## Exponential Smoothing
+
+.pull-left[
+Exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get more remote. Exponential smoothing is a family of methods that vary by their trend and seasonal components.
+
++ There can be no trend (N), an additive (A) linear trend from the forecast horizon, or a damped additive (Ad) trend leveling off from the forecast horizon. The trend could also be multiplicative (M) or multiplicative damped (Md), but Hyndman explains that they do not produced good forecasts.
++ There can be no seasonality (N), or it can be additive (A) change, or multiplicative (M) (proportional) change. Apparently seasonality does not have an additive damped version.
+]
+
 .pull-right[
-In the code chunk below, `dmy()` of **lubridate** package is used to convert data type of Month-Year field from Character to Date.
+![:scale 80%](img/image2.jpg)
+]
+
+---
+## What is Stationary in Time Series?
+
+.pull-left[
+A *stationary* time series is one whose statistical properties do not depend on the time at which the series is observed. Thus, time series with trends, or with seasonality, are not stationary. On the other hand, a white noise series is stationary.  
+
+Figure on the right shows that the monthly visitor arrivals from Vietnam by air are non-stationary.
+]
+
+.pull-right[
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-3-1.png" width="100%" /&gt;
+
+In general, a stationary time series will have no predictable patterns in the long-term.
+]
+
+---
+### What is differencing?
+
+On way to make a time series non-stationary is to compute the differences between consecutive observations. This is known as **differencing**.  Differencing can help stabilise the mean of a time series by removing changes in the level of a time series, and therefore eliminating (or reducing) trend and seasonality.
 
 
 ```r
-ts_data$`Month-Year` &lt;- dmy(
-  ts_data$`Month-Year`)
+vietnam &lt;- tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  mutate(Arrival_lag1 = difference(Arrivals,
+                           lag = 1))
+```
+
+
+```r
+vietnam &lt;- vietnam %&gt;%
+  mutate(Arrival_diff1 = difference(Arrivals,
+                           differences = 12))
+```
+
+
+
+```r
+vietnam %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  gg_tsdisplay(Arrivals,
+    plot_type='partial')
+```
+
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-6-1.png" width="100%" /&gt;
+
+---
+
+.pull-left[
+
+```r
+tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  gg_tsdisplay(difference(
+    Arrivals,
+    lag = 1), 
+    plot_type='partial')
+```
+
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-7-1.png" width="100%" /&gt;
+]
+
+.pull-right[
+
+```r
+tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  gg_tsdisplay(difference(
+    Arrivals,
+    difference = 6), 
+    plot_type='partial')
+```
+
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-8-1.png" width="100%" /&gt;
+
+
+]
+
+The PACF is suggestive of an AR(1) model; so an initial candidate model is an ARIMA(1,1,0). The ACF suggests an MA(1) model; so an alternative candidate is an ARIMA(0,1,1).
+
+---
+## Uni Time Series Forecasting: 
+
+
+```r
+fit &lt;- tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  model(
+    arima110 = ARIMA(Arrivals ~ pdq(1,1,0)),
+    arima011 = ARIMA(Arrivals ~ pdq(0,1,1)),
+    search = ARIMA(Arrivals, stepwise=FALSE)
+  )
+fit
+```
+
+---
+
+
+```r
+fit %&gt;% pivot_longer(!Country, 
+                     names_to = "Model name",
+                     values_to = "Orders")
+```
+---
+
+
+```r
+glance(fit) %&gt;% 
+  arrange(AICc) %&gt;% 
+  select(.model:BIC)
+```
+
+---
+
+
+```r
+vietnam &lt;- tbl_longer %&gt;%
+  filter(Country == "Vietnam")
+```
+
+---
+Data Sampling
+
+Let’s split the data into training and test sets using `initial_time_split()`
+
+---
+# Split Data 80/20
+
+
+```r
+splits &lt;- vietnam %&gt;%
+  initial_time_split(prop = 0.92)
+```
+
+
+---
+## Exponential Smoothing: fable methods
+
+.pull-left[
+In fable, exponential smoothing is supported by [`ETS()`](https://fable.tidyverts.org/reference/ETS.html). The combinations are specified through the formula:
+
+
+```r
+ETS(y ~ error(c("A", "M")) 
+    + trend(c("N", "A", "Ad")) 
+    + season(c("N", "A", "M"))
 ```
 ]
+
+---
+
+
+
+---
+### Simple exponential smoothing
+
+.pull-left[
+
+```r
+Vietnam_ses &lt;- tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  model(ETS(Arrivals ~ error("A") 
+            + trend("N") 
+            + season("N")))
+Vietnam_ses %&gt;% report()
+```
+
+```
+## Series: Arrivals 
+## Model: ETS(A,N,N) 
+##   Smoothing parameters:
+##     alpha = 0.9983645 
+## 
+##   Initial states:
+##      l[0]
+##  10589.28
+## 
+##   sigma^2:  31373899
+## 
+##      AIC     AICc      BIC 
+## 3205.293 3205.465 3214.203
+```
+]
+
+.pull-right[
+Check the model assumptions with residuals plots.
+
+
+```r
+gg_tsresiduals(Vietnam_ses)
+```
+
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-16-1.png" width="100%" /&gt;
+]
+
+
+---
+### Simple exponential smoothing
+
+Then, forecast() is used to forecast next 12 months values.
+
+
+```r
+Vietnam_ses_fc &lt;- Vietnam_ses %&gt;%
+  forecast(h = "1 year")
+Vietnam_ses_fc
+```
+
+```
+## # A fable: 12 x 5 [1M]
+## # Key:     Country, .model [1]
+##    Country .model                                 Month          Arrivals  .mean
+##    &lt;chr&gt;   &lt;chr&gt;                                  &lt;mth&gt;            &lt;dist&gt;  &lt;dbl&gt;
+##  1 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Jan N(34391, 3.1e+07) 34391.
+##  2 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Feb N(34391, 6.3e+07) 34391.
+##  3 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Mar N(34391, 9.4e+07) 34391.
+##  4 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Apr N(34391, 1.3e+08) 34391.
+##  5 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 May N(34391, 1.6e+08) 34391.
+##  6 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Jun N(34391, 1.9e+08) 34391.
+##  7 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Jul N(34391, 2.2e+08) 34391.
+##  8 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Aug N(34391, 2.5e+08) 34391.
+##  9 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Sep N(34391, 2.8e+08) 34391.
+## 10 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Oct N(34391, 3.1e+08) 34391.
+## 11 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Nov N(34391, 3.4e+08) 34391.
+## 12 Vietnam "ETS(Arrivals ~ error(\"A\") + tre… 2020 Dec N(34391, 3.8e+08) 34391.
+```
+
+
+
+
+
+
+
+---
+### Holt’s Linear Method
+
+
+```r
+Vietnam_WH &lt;- tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  model(
+    Additive = ETS(Arrivals ~ error("A") 
+                   + trend("A") 
+                   + season("A")),
+    Multiplicative = ETS(Arrivals ~ error("M") 
+                         + trend("A") 
+                         + season("M"))
+    )
+
+Vietnam_WH %&gt;% report()
+```
+
+```
+## # A tibble: 2 × 10
+##   Country .model          sigma2 log_lik   AIC  AICc   BIC    MSE   AMSE     MAE
+##   &lt;chr&gt;   &lt;chr&gt;            &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;  &lt;dbl&gt;   &lt;dbl&gt;
+## 1 Vietnam Additive       6.74e+6  -1481. 2997. 3002. 3047. 5.99e6 1.06e7 1.91e+3
+## 2 Vietnam Multiplicative 4.72e-3  -1434. 2902. 2907. 2953. 3.70e6 4.12e6 5.23e-2
+```
+]
+
+---
+### Auto ETS
+
+
+```r
+Vietnam_autoETS &lt;- tsbl_longer %&gt;%
+  filter(Country == "Vietnam") %&gt;%
+  model(ETS(Arrivals))
+
+Vietnam_autoETS %&gt;% report()
+```
+
+```
+## Series: Arrivals 
+## Model: ETS(M,A,M) 
+##   Smoothing parameters:
+##     alpha = 0.1666203 
+##     beta  = 0.0002899021 
+##     gamma = 0.0001045113 
+## 
+##   Initial states:
+##      l[0]     b[0]      s[0]     s[-1]    s[-2]     s[-3]    s[-4]    s[-5]
+##  15044.24 213.0072 0.9233616 0.8400294 0.870394 0.8597781 1.118372 1.495655
+##     s[-6]     s[-7]     s[-8]     s[-9]    s[-10]    s[-11]
+##  1.307382 0.9917595 0.9895316 0.9019533 0.8858836 0.8158997
+## 
+##   sigma^2:  0.0047
+## 
+##      AIC     AICc      BIC 
+## 2902.081 2906.938 2952.567
+```
+
+---
+### 
+
+Check the model assumptions with residuals plots.
+
+.pull-left[
+
+```r
+gg_tsresiduals(Vietnam_autoETS)
+```
+
+&lt;img src="Topic2_files/figure-html/unnamed-chunk-20-1.png" width="100%" /&gt;
+]
+
+
+---
+### Auto ETS
+
+
+```r
+UK_autoETS &lt;- tsbl_longer %&gt;%
+  filter(Country == "United Kingdom") %&gt;%
+  model(ETS(Arrivals ~ season("M")))
+
+UK_autoETS
+```
+
+```
+## # A mable: 1 x 2
+## # Key:     Country [1]
+##   Country        `ETS(Arrivals ~ season("M"))`
+##   &lt;chr&gt;                                &lt;model&gt;
+## 1 United Kingdom                  &lt;ETS(M,A,M)&gt;
+```
+
+---
+## Time Series Forecasting: modeltime methods
+
+.pull-left[
+
++ Collect data and split into training and test sets
++ Create &amp; Fit Multiple Models
++ Add fitted models to a Model Table
++ Calibrate the models to a testing set.
++ Perform Testing Set Forecast &amp; Accuracy Evaluation
++ Refit the models to Full Dataset &amp; Forecast Forward
+]
+
+---
+### Step 1: Data sampling
+
+.pull-left[
+Extracting data for model calibration.
+
+
+```r
+vietnam &lt;- tbl_longer %&gt;%
+  filter(Country == "Vietnam" &amp;
+         `Month-Year` &lt; "2019-01-01")
+vietnam_holdup &lt;- tbl_longer %&gt;%
+  filter(Country == "Vietnam" &amp;
+         `Month-Year` &gt;= "2019-01-01")
+```
+]
+
+.pull-right[
+Let’s split the data into training and test sets using `initial_time_split()`
+
+
+```r
+vietnam_splits &lt;- initial_time_split(
+  vietnam, prop = 0.91)
+vietnam_train &lt;- training(vietnam_splits)
+vietnam_test &lt;- testing(vietnam_splits)
+```
+]
+
+---
+### Step 2 - Create &amp; Fit Multiple Models
+
+.pull-left[
+We can easily create dozens of forecasting models by combining modeltime and parsnip. We can also use the workflows interface for adding preprocessing! Your forecasting possibilities are endless. Let’s get a few basic models developed:
+
+Model 1: Exponential Smoothing (Modeltime)
+
+Next, create an Error-Trend-Season (ETS) model using an Exponential Smoothing State Space model. This is accomplished with exp_smoothing().
+
+
+```r
+model_fit_ets &lt;- exp_smoothing() %&gt;%
+    set_engine(engine = "ets") %&gt;%
+    fit(Arrivals ~ `Month-Year`, 
+        data = training(vietnam_splits))
+```
+]
+
+.pull-right[
+Model 2: Auto ARIMA (Modeltime)
+
+First, we create a basic univariate ARIMA model using “Auto Arima” using arima_reg()
+
+
+```r
+model_fit_arima &lt;- arima_reg() %&gt;%
+  set_engine(engine = "auto_arima") %&gt;%
+  fit(Arrivals ~ `Month-Year`, 
+      data = training(vietnam_splits))
+```
+]
+
+---
+### Step 3 - Add fitted models to a Model Table
+
+
+```r
+models_tbl &lt;- modeltime_table(
+  model_fit_ets,
+  model_fit_arima)
+
+models_tbl
+```
+
+```
+## # Modeltime Table
+## # A tibble: 2 × 3
+##   .model_id .model   .model_desc                       
+##       &lt;int&gt; &lt;list&gt;   &lt;chr&gt;                             
+## 1         1 &lt;fit[+]&gt; ETS(M,A,M)                        
+## 2         2 &lt;fit[+]&gt; ARIMA(2,0,0)(2,1,0)[12] WITH DRIFT
+```
+
+---
+### Step 4 - Calibrate the model to a testing set
+
+
+```r
+calibration_tbl &lt;- models_tbl %&gt;%
+    modeltime_calibrate(new_data = testing(vietnam_splits))
+
+calibration_tbl
+```
+
+```
+## # Modeltime Table
+## # A tibble: 2 × 5
+##   .model_id .model   .model_desc                        .type .calibration_data
+##       &lt;int&gt; &lt;list&gt;   &lt;chr&gt;                              &lt;chr&gt; &lt;list&gt;           
+## 1         1 &lt;fit[+]&gt; ETS(M,A,M)                         Test  &lt;tibble [12 × 4]&gt;
+## 2         2 &lt;fit[+]&gt; ARIMA(2,0,0)(2,1,0)[12] WITH DRIFT Test  &lt;tibble [12 × 4]&gt;
+```
+
+---
+### Step 5 - Testing Set Forecast &amp; Accuracy Evaluation
+
+5A - Visualizing the Forecast Test
+
+
+```r
+calibration_tbl %&gt;%
+  modeltime_forecast(
+    new_data = testing(vietnam_splits),
+    actual_data = vietnam) %&gt;%
+  plot_modeltime_forecast(
+    .legend_max_width = 25, 
+    .interactive = TRUE)
+```
+
+<div id="htmlwidget-d75d4a2c80cca02e8cc1" style="width:100%;height:252px;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-d75d4a2c80cca02e8cc1">{"x":{"data":[{"x":["2008-01-01","2008-02-01","2008-03-01","2008-04-01","2008-05-01","2008-06-01","2008-07-01","2008-08-01","2008-09-01","2008-10-01","2008-11-01","2008-12-01","2009-01-01","2009-02-01","2009-03-01","2009-04-01","2009-05-01","2009-06-01","2009-07-01","2009-08-01","2009-09-01","2009-10-01","2009-11-01","2009-12-01","2010-01-01","2010-02-01","2010-03-01","2010-04-01","2010-05-01","2010-06-01","2010-07-01","2010-08-01","2010-09-01","2010-10-01","2010-11-01","2010-12-01","2011-01-01","2011-02-01","2011-03-01","2011-04-01","2011-05-01","2011-06-01","2011-07-01","2011-08-01","2011-09-01","2011-10-01","2011-11-01","2011-12-01","2012-01-01","2012-02-01","2012-03-01","2012-04-01","2012-05-01","2012-06-01","2012-07-01","2012-08-01","2012-09-01","2012-10-01","2012-11-01","2012-12-01","2013-01-01","2013-02-01","2013-03-01","2013-04-01","2013-05-01","2013-06-01","2013-07-01","2013-08-01","2013-09-01","2013-10-01","2013-11-01","2013-12-01","2014-01-01","2014-02-01","2014-03-01","2014-04-01","2014-05-01","2014-06-01","2014-07-01","2014-08-01","2014-09-01","2014-10-01","2014-11-01","2014-12-01","2015-01-01","2015-02-01","2015-03-01","2015-04-01","2015-05-01","2015-06-01","2015-07-01","2015-08-01","2015-09-01","2015-10-01","2015-11-01","2015-12-01","2016-01-01","2016-02-01","2016-03-01","2016-04-01","2016-05-01","2016-06-01","2016-07-01","2016-08-01","2016-09-01","2016-10-01","2016-11-01","2016-12-01","2017-01-01","2017-02-01","2017-03-01","2017-04-01","2017-05-01","2017-06-01","2017-07-01","2017-08-01","2017-09-01","2017-10-01","2017-11-01","2017-12-01","2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01","2018-12-01","2018-11-01","2018-10-01","2018-09-01","2018-08-01","2018-07-01","2018-06-01","2018-05-01","2018-04-01","2018-03-01","2018-02-01","2018-01-01","2017-12-01","2017-11-01","2017-10-01","2017-09-01","2017-08-01","2017-07-01","2017-06-01","2017-05-01","2017-04-01","2017-03-01","2017-02-01","2017-01-01","2016-12-01","2016-11-01","2016-10-01","2016-09-01","2016-08-01","2016-07-01","2016-06-01","2016-05-01","2016-04-01","2016-03-01","2016-02-01","2016-01-01","2015-12-01","2015-11-01","2015-10-01","2015-09-01","2015-08-01","2015-07-01","2015-06-01","2015-05-01","2015-04-01","2015-03-01","2015-02-01","2015-01-01","2014-12-01","2014-11-01","2014-10-01","2014-09-01","2014-08-01","2014-07-01","2014-06-01","2014-05-01","2014-04-01","2014-03-01","2014-02-01","2014-01-01","2013-12-01","2013-11-01","2013-10-01","2013-09-01","2013-08-01","2013-07-01","2013-06-01","2013-05-01","2013-04-01","2013-03-01","2013-02-01","2013-01-01","2012-12-01","2012-11-01","2012-10-01","2012-09-01","2012-08-01","2012-07-01","2012-06-01","2012-05-01","2012-04-01","2012-03-01","2012-02-01","2012-01-01","2011-12-01","2011-11-01","2011-10-01","2011-09-01","2011-08-01","2011-07-01","2011-06-01","2011-05-01","2011-04-01","2011-03-01","2011-02-01","2011-01-01","2010-12-01","2010-11-01","2010-10-01","2010-09-01","2010-08-01","2010-07-01","2010-06-01","2010-05-01","2010-04-01","2010-03-01","2010-02-01","2010-01-01","2009-12-01","2009-11-01","2009-10-01","2009-09-01","2009-08-01","2009-07-01","2009-06-01","2009-05-01","2009-04-01","2009-03-01","2009-02-01","2009-01-01","2008-12-01","2008-11-01","2008-10-01","2008-09-01","2008-08-01","2008-07-01","2008-06-01","2008-05-01","2008-04-01","2008-03-01","2008-02-01","2008-01-01","2008-01-01"],"y":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"text":[".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(44,62,80,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"ACTUAL","legendgroup":"ACTUAL","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01","2018-12-01","2018-11-01","2018-10-01","2018-09-01","2018-08-01","2018-07-01","2018-06-01","2018-05-01","2018-04-01","2018-03-01","2018-02-01","2018-01-01","2018-01-01"],"y":[23938.3695265293,26411.3738748114,27294.0066760703,31395.365961911,30822.3512021242,43719.7798996805,50199.1693968545,36483.1094213082,26855.2739586654,27923.0456690507,26859.6390381444,30440.8663180645,45546.6061980926,41965.3789181725,43028.7855490788,41961.0138386935,51588.8493013363,65304.9092768826,58825.5197797086,45928.0910821523,46501.1058419391,42399.7465560984,41517.1137548395,39044.1094065574,23938.3695265293],"text":[".index: 2018-01-01<br />.value: 31491.24<br />.conf_lo: 23938.37<br />.conf_hi: 39044.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-02-01<br />.value: 33964.24<br />.conf_lo: 26411.37<br />.conf_hi: 41517.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-03-01<br />.value: 34846.88<br />.conf_lo: 27294.01<br />.conf_hi: 42399.75<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-04-01<br />.value: 38948.24<br />.conf_lo: 31395.37<br />.conf_hi: 46501.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-05-01<br />.value: 38375.22<br />.conf_lo: 30822.35<br />.conf_hi: 45928.09<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-06-01<br />.value: 51272.65<br />.conf_lo: 43719.78<br />.conf_hi: 58825.52<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-07-01<br />.value: 57752.04<br />.conf_lo: 50199.17<br />.conf_hi: 65304.91<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-08-01<br />.value: 44035.98<br />.conf_lo: 36483.11<br />.conf_hi: 51588.85<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-09-01<br />.value: 34408.14<br />.conf_lo: 26855.27<br />.conf_hi: 41961.01<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-10-01<br />.value: 35475.92<br />.conf_lo: 27923.05<br />.conf_hi: 43028.79<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-11-01<br />.value: 34412.51<br />.conf_lo: 26859.64<br />.conf_hi: 41965.38<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-12-01<br />.value: 37993.74<br />.conf_lo: 30440.87<br />.conf_hi: 45546.61<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-12-01<br />.value: 37993.74<br />.conf_lo: 30440.87<br />.conf_hi: 45546.61<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-11-01<br />.value: 34412.51<br />.conf_lo: 26859.64<br />.conf_hi: 41965.38<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-10-01<br />.value: 35475.92<br />.conf_lo: 27923.05<br />.conf_hi: 43028.79<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-09-01<br />.value: 34408.14<br />.conf_lo: 26855.27<br />.conf_hi: 41961.01<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-08-01<br />.value: 44035.98<br />.conf_lo: 36483.11<br />.conf_hi: 51588.85<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-07-01<br />.value: 57752.04<br />.conf_lo: 50199.17<br />.conf_hi: 65304.91<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-06-01<br />.value: 51272.65<br />.conf_lo: 43719.78<br />.conf_hi: 58825.52<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-05-01<br />.value: 38375.22<br />.conf_lo: 30822.35<br />.conf_hi: 45928.09<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-04-01<br />.value: 38948.24<br />.conf_lo: 31395.37<br />.conf_hi: 46501.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-03-01<br />.value: 34846.88<br />.conf_lo: 27294.01<br />.conf_hi: 42399.75<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-02-01<br />.value: 33964.24<br />.conf_lo: 26411.37<br />.conf_hi: 41517.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-01-01<br />.value: 31491.24<br />.conf_lo: 23938.37<br />.conf_hi: 39044.11<br />.model_desc: 1_ETS(M,A,M)",".index: 2018-01-01<br />.value: 31491.24<br />.conf_lo: 23938.37<br />.conf_hi: 39044.11<br />.model_desc: 1_ETS(M,A,M)"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(227,26,28,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"1_ETS(M,A,M)","legendgroup":"1_ETS(M,A,M)","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01","2018-12-01","2018-12-01","2018-11-01","2018-10-01","2018-09-01","2018-08-01","2018-07-01","2018-06-01","2018-05-01","2018-04-01","2018-03-01","2018-02-01","2018-01-01","2018-01-01"],"y":[23760.2061685717,23539.114833683,25196.162956479,29077.6644235748,29914.9110227323,40425.7234900815,47049.0318914443,34600.8194050754,25485.1827026416,24715.9027559081,24734.0983923067,26739.3132205001,26739.3132205001,44333.3696230564,42328.154794863,42309.9591584644,43079.2391051979,52194.8758076317,64643.0882940006,58019.7798926378,47508.9674252886,46671.7208261311,42790.2193590353,41133.1712362393,41354.262571128,23760.2061685717],"text":[".index: 2018-01-01<br />.value: 32557.23<br />.conf_lo: 23760.21<br />.conf_hi: 41354.26<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-02-01<br />.value: 32336.14<br />.conf_lo: 23539.11<br />.conf_hi: 41133.17<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-03-01<br />.value: 33993.19<br />.conf_lo: 25196.16<br />.conf_hi: 42790.22<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-04-01<br />.value: 37874.69<br />.conf_lo: 29077.66<br />.conf_hi: 46671.72<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-05-01<br />.value: 38711.94<br />.conf_lo: 29914.91<br />.conf_hi: 47508.97<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-06-01<br />.value: 49222.75<br />.conf_lo: 40425.72<br />.conf_hi: 58019.78<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-07-01<br />.value: 55846.06<br />.conf_lo: 47049.03<br />.conf_hi: 64643.09<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-08-01<br />.value: 43397.85<br />.conf_lo: 34600.82<br />.conf_hi: 52194.88<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-09-01<br />.value: 34282.21<br />.conf_lo: 25485.18<br />.conf_hi: 43079.24<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-10-01<br />.value: 33512.93<br />.conf_lo: 24715.90<br />.conf_hi: 42309.96<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-11-01<br />.value: 33531.13<br />.conf_lo: 24734.10<br />.conf_hi: 42328.15<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-12-01<br />.value: 35536.34<br />.conf_lo: 26739.31<br />.conf_hi: 44333.37<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-12-01<br />.value: 35536.34<br />.conf_lo: 26739.31<br />.conf_hi: 44333.37<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-12-01<br />.value: 35536.34<br />.conf_lo: 26739.31<br />.conf_hi: 44333.37<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-11-01<br />.value: 33531.13<br />.conf_lo: 24734.10<br />.conf_hi: 42328.15<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-10-01<br />.value: 33512.93<br />.conf_lo: 24715.90<br />.conf_hi: 42309.96<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-09-01<br />.value: 34282.21<br />.conf_lo: 25485.18<br />.conf_hi: 43079.24<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-08-01<br />.value: 43397.85<br />.conf_lo: 34600.82<br />.conf_hi: 52194.88<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-07-01<br />.value: 55846.06<br />.conf_lo: 47049.03<br />.conf_hi: 64643.09<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-06-01<br />.value: 49222.75<br />.conf_lo: 40425.72<br />.conf_hi: 58019.78<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-05-01<br />.value: 38711.94<br />.conf_lo: 29914.91<br />.conf_hi: 47508.97<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-04-01<br />.value: 37874.69<br />.conf_lo: 29077.66<br />.conf_hi: 46671.72<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-03-01<br />.value: 33993.19<br />.conf_lo: 25196.16<br />.conf_hi: 42790.22<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-02-01<br />.value: 32336.14<br />.conf_lo: 23539.11<br />.conf_hi: 41133.17<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-01-01<br />.value: 32557.23<br />.conf_lo: 23760.21<br />.conf_hi: 41354.26<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-01-01<br />.value: 32557.23<br />.conf_lo: 23760.21<br />.conf_hi: 41354.26<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[..."],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(24,188,156,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"2_ARIMA(2,0,0)(2,1,0)[...","legendgroup":"2_ARIMA(2,0,0)(2,1,0)[...","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2008-01-01","2008-02-01","2008-03-01","2008-04-01","2008-05-01","2008-06-01","2008-07-01","2008-08-01","2008-09-01","2008-10-01","2008-11-01","2008-12-01","2009-01-01","2009-02-01","2009-03-01","2009-04-01","2009-05-01","2009-06-01","2009-07-01","2009-08-01","2009-09-01","2009-10-01","2009-11-01","2009-12-01","2010-01-01","2010-02-01","2010-03-01","2010-04-01","2010-05-01","2010-06-01","2010-07-01","2010-08-01","2010-09-01","2010-10-01","2010-11-01","2010-12-01","2011-01-01","2011-02-01","2011-03-01","2011-04-01","2011-05-01","2011-06-01","2011-07-01","2011-08-01","2011-09-01","2011-10-01","2011-11-01","2011-12-01","2012-01-01","2012-02-01","2012-03-01","2012-04-01","2012-05-01","2012-06-01","2012-07-01","2012-08-01","2012-09-01","2012-10-01","2012-11-01","2012-12-01","2013-01-01","2013-02-01","2013-03-01","2013-04-01","2013-05-01","2013-06-01","2013-07-01","2013-08-01","2013-09-01","2013-10-01","2013-11-01","2013-12-01","2014-01-01","2014-02-01","2014-03-01","2014-04-01","2014-05-01","2014-06-01","2014-07-01","2014-08-01","2014-09-01","2014-10-01","2014-11-01","2014-12-01","2015-01-01","2015-02-01","2015-03-01","2015-04-01","2015-05-01","2015-06-01","2015-07-01","2015-08-01","2015-09-01","2015-10-01","2015-11-01","2015-12-01","2016-01-01","2016-02-01","2016-03-01","2016-04-01","2016-05-01","2016-06-01","2016-07-01","2016-08-01","2016-09-01","2016-10-01","2016-11-01","2016-12-01","2017-01-01","2017-02-01","2017-03-01","2017-04-01","2017-05-01","2017-06-01","2017-07-01","2017-08-01","2017-09-01","2017-10-01","2017-11-01","2017-12-01","2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01"],"y":[10315,13415,14320,15413,14424,21368,21994,19052,12680,14893,14379,16375,16022,15433,15136,18013,16461,22540,25817,19212,14828,17813,16747,18783,15781,16335,18061,22154,21461,28146,34020,25351,20105,20591,17991,23002,16891,22046,19430,21050,20422,30167,36526,23844,22842,20140,19790,23650,22637,22627,24102,25429,26039,32281,37527,27372,21864,22202,21804,24950,19793,24155,23807,27309,25326,33707,37861,28930,24113,24833,24109,25421,22967,27391,26405,26244,31407,40436,44613,35029,24965,26165,25635,27369,24906,23760,27347,31299,30131,38188,45043,32747,24834,26213,25102,27128,25981,29498,28805,34449,34454,43488,48958,38351,28041,27035,28643,31285,31125,28207,31443,33682,36844,50591,58349,43919,35317,33438,32527,33860,31432,35137,35832,41723,45269,55824,63476,49645,37341,36355,33356,33778],"text":[".index: 2008-01-01<br />.value: 10315.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(44,62,80,1)","dash":"solid"},"hoveron":"points","name":"ACTUAL","legendgroup":"ACTUAL","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01"],"y":[31491.2394665433,33964.2438148255,34846.8766160843,38948.235901925,38375.2211421382,51272.6498396946,57752.0393368685,44035.9793613223,34408.1438986794,35475.9156090647,34412.5089781584,37993.7362580785],"text":[".index: 2018-01-01<br />.value: 31491.24<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-02-01<br />.value: 33964.24<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-03-01<br />.value: 34846.88<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-04-01<br />.value: 38948.24<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-05-01<br />.value: 38375.22<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-06-01<br />.value: 51272.65<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-07-01<br />.value: 57752.04<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-08-01<br />.value: 44035.98<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-09-01<br />.value: 34408.14<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-10-01<br />.value: 35475.92<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-11-01<br />.value: 34412.51<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2018-12-01<br />.value: 37993.74<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(227,26,28,1)","dash":"solid"},"hoveron":"points","name":"1_ETS(M,A,M)","legendgroup":"1_ETS(M,A,M)","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01"],"y":[32557.2343698499,32336.1430349612,33993.1911577571,37874.692624853,38711.9392240105,49222.7516913597,55846.0600927224,43397.8476063535,34282.2109039197,33512.9309571862,33531.1265935848,35536.3414217782],"text":[".index: 2018-01-01<br />.value: 32557.23<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-02-01<br />.value: 32336.14<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-03-01<br />.value: 33993.19<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-04-01<br />.value: 37874.69<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-05-01<br />.value: 38711.94<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-06-01<br />.value: 49222.75<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-07-01<br />.value: 55846.06<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-08-01<br />.value: 43397.85<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-09-01<br />.value: 34282.21<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-10-01<br />.value: 33512.93<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-11-01<br />.value: 33531.13<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2018-12-01<br />.value: 35536.34<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[..."],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(24,188,156,1)","dash":"solid"},"hoveron":"points","name":"2_ARIMA(2,0,0)(2,1,0)[...","legendgroup":"2_ARIMA(2,0,0)(2,1,0)[...","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null}],"layout":{"margin":{"t":52.320939334638,"r":7.30593607305936,"b":34.1291585127202,"l":40.1826484018265},"plot_bgcolor":"rgba(255,255,255,1)","paper_bgcolor":"rgba(255,255,255,1)","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187},"title":{"text":"Forecast Plot","font":{"color":"rgba(44,62,80,1)","family":"","size":17.5342465753425},"x":0,"xref":"paper"},"xaxis":{"domain":[0,1],"automargin":true,"type":"date","autorange":true,"range":["2007-06-15","2019-06-18"],"tickmode":"auto","ticktext":["2008","2010","2012","2014","2016","2018"],"tickvals":[13879,14610,15340,16071,16801,17532],"categoryorder":"array","categoryarray":["2008","2010","2012","2014","2016","2018"],"nticks":null,"ticks":"outside","tickcolor":"rgba(204,204,204,1)","ticklen":3.65296803652968,"tickwidth":0.22139200221392,"showticklabels":true,"tickfont":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(204,204,204,1)","gridwidth":0.22139200221392,"zeroline":false,"anchor":"y","title":{"text":"","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"yaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":true,"range":[7565.50453615587,68054.4047407267],"tickmode":"auto","ticktext":["20000","40000","60000"],"tickvals":[20000,40000,60000],"categoryorder":"array","categoryarray":["20000","40000","60000"],"nticks":null,"ticks":"outside","tickcolor":"rgba(204,204,204,1)","ticklen":3.65296803652968,"tickwidth":0.22139200221392,"showticklabels":true,"tickfont":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(204,204,204,1)","gridwidth":0.22139200221392,"zeroline":false,"anchor":"x","title":{"text":"","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"shapes":[{"type":"rect","fillcolor":"transparent","line":{"color":"rgba(44,62,80,1)","width":0.33208800332088,"linetype":"solid"},"yref":"paper","xref":"paper","x0":0,"x1":1,"y0":0,"y1":1}],"showlegend":true,"legend":{"bgcolor":"rgba(255,255,255,1)","bordercolor":"transparent","borderwidth":1.88976377952756,"font":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"title":{"text":"Legend","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}}},"hovermode":"closest","barmode":"relative"},"config":{"doubleClick":"reset","modeBarButtonsToAdd":["hoverclosest","hovercompare"],"showSendToCloud":false},"source":"A","attrs":{"72c81d022f67":{"x":{},"y":{},"ymin":{},"ymax":{},"colour":{},"type":"scatter"},"72c88c91e0d":{"x":{},"y":{},"colour":{}}},"cur_data":"72c81d022f67","visdat":{"72c81d022f67":["function (y) ","x"],"72c88c91e0d":["function (y) ","x"]},"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
+
+---
+### Step 5 - Testing Set Forecast &amp; Accuracy Evaluation
+
+5B - Accuracy Metrics
+
+
+```r
+calibration_tbl %&gt;%
+  modeltime_accuracy() %&gt;%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+
+<div id="xkmamaombu" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#xkmamaombu .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#xkmamaombu .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#xkmamaombu .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#xkmamaombu .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#xkmamaombu .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#xkmamaombu .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#xkmamaombu .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#xkmamaombu .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#xkmamaombu .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#xkmamaombu .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#xkmamaombu .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#xkmamaombu .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#xkmamaombu .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#xkmamaombu .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#xkmamaombu .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#xkmamaombu .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#xkmamaombu .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#xkmamaombu .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#xkmamaombu .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#xkmamaombu .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-left: 4px;
+  padding-right: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#xkmamaombu .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#xkmamaombu .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#xkmamaombu .gt_left {
+  text-align: left;
+}
+
+#xkmamaombu .gt_center {
+  text-align: center;
+}
+
+#xkmamaombu .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#xkmamaombu .gt_font_normal {
+  font-weight: normal;
+}
+
+#xkmamaombu .gt_font_bold {
+  font-weight: bold;
+}
+
+#xkmamaombu .gt_font_italic {
+  font-style: italic;
+}
+
+#xkmamaombu .gt_super {
+  font-size: 65%;
+}
+
+#xkmamaombu .gt_two_val_uncert {
+  display: inline-block;
+  line-height: 1em;
+  text-align: right;
+  font-size: 60%;
+  vertical-align: -0.25em;
+  margin-left: 0.1em;
+}
+
+#xkmamaombu .gt_footnote_marks {
+  font-style: italic;
+  font-weight: normal;
+  font-size: 75%;
+  vertical-align: 0.4em;
+}
+
+#xkmamaombu .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#xkmamaombu .gt_slash_mark {
+  font-size: 0.7em;
+  line-height: 0.7em;
+  vertical-align: 0.15em;
+}
+
+#xkmamaombu .gt_fraction_numerator {
+  font-size: 0.6em;
+  line-height: 0.6em;
+  vertical-align: 0.45em;
+}
+
+#xkmamaombu .gt_fraction_denominator {
+  font-size: 0.6em;
+  line-height: 0.6em;
+  vertical-align: -0.05em;
+}
+</style>
+<table class="gt_table">
+  <thead class="gt_header">
+    <tr>
+      <th colspan="9" class="gt_heading gt_title gt_font_normal gt_bottom_border" style>Accuracy Table</th>
+    </tr>
+    
+  </thead>
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">.model_id</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">.model_desc</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">.type</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">mae</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">mape</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">mase</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">smape</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">rmse</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">rsq</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr><td class="gt_row gt_right">1</td>
+<td class="gt_row gt_left">ETS(M,A,M)</td>
+<td class="gt_row gt_left">Test</td>
+<td class="gt_row gt_right">3071.18</td>
+<td class="gt_row gt_right">6.88</td>
+<td class="gt_row gt_right">0.54</td>
+<td class="gt_row gt_right">7.09</td>
+<td class="gt_row gt_right">3772.44</td>
+<td class="gt_row gt_right">0.93</td></tr>
+    <tr><td class="gt_row gt_right">2</td>
+<td class="gt_row gt_left">ARIMA(2,0,0)(2,1,0)[12] WITH DRIFT</td>
+<td class="gt_row gt_left">Test</td>
+<td class="gt_row gt_right">3706.91</td>
+<td class="gt_row gt_right">8.21</td>
+<td class="gt_row gt_right">0.65</td>
+<td class="gt_row gt_right">8.62</td>
+<td class="gt_row gt_right">4393.86</td>
+<td class="gt_row gt_right">0.96</td></tr>
+  </tbody>
+  
+  
+</table>
+</div>
+
+---
+### Step 6 - Refit to Full Dataset &amp; Forecast Forward
+
+The final step is to refit the models to the full dataset using modeltime_refit() and forecast them forward.
+
+
+```r
+refit_tbl &lt;- calibration_tbl %&gt;%
+    modeltime_refit(data = vietnam)
+
+refit_tbl %&gt;%
+    modeltime_forecast(
+      h = "12 months",
+      actual_data = vietnam) %&gt;%
+  plot_modeltime_forecast(
+    .legend_max_width = 25, 
+    .interactive = TRUE)
+```
+
+<div id="htmlwidget-9fd478f3f3ac4f5f6820" style="width:100%;height:252px;" class="plotly html-widget"></div>
+<script type="application/json" data-for="htmlwidget-9fd478f3f3ac4f5f6820">{"x":{"data":[{"x":["2008-01-01","2008-02-01","2008-03-01","2008-04-01","2008-05-01","2008-06-01","2008-07-01","2008-08-01","2008-09-01","2008-10-01","2008-11-01","2008-12-01","2009-01-01","2009-02-01","2009-03-01","2009-04-01","2009-05-01","2009-06-01","2009-07-01","2009-08-01","2009-09-01","2009-10-01","2009-11-01","2009-12-01","2010-01-01","2010-02-01","2010-03-01","2010-04-01","2010-05-01","2010-06-01","2010-07-01","2010-08-01","2010-09-01","2010-10-01","2010-11-01","2010-12-01","2011-01-01","2011-02-01","2011-03-01","2011-04-01","2011-05-01","2011-06-01","2011-07-01","2011-08-01","2011-09-01","2011-10-01","2011-11-01","2011-12-01","2012-01-01","2012-02-01","2012-03-01","2012-04-01","2012-05-01","2012-06-01","2012-07-01","2012-08-01","2012-09-01","2012-10-01","2012-11-01","2012-12-01","2013-01-01","2013-02-01","2013-03-01","2013-04-01","2013-05-01","2013-06-01","2013-07-01","2013-08-01","2013-09-01","2013-10-01","2013-11-01","2013-12-01","2014-01-01","2014-02-01","2014-03-01","2014-04-01","2014-05-01","2014-06-01","2014-07-01","2014-08-01","2014-09-01","2014-10-01","2014-11-01","2014-12-01","2015-01-01","2015-02-01","2015-03-01","2015-04-01","2015-05-01","2015-06-01","2015-07-01","2015-08-01","2015-09-01","2015-10-01","2015-11-01","2015-12-01","2016-01-01","2016-02-01","2016-03-01","2016-04-01","2016-05-01","2016-06-01","2016-07-01","2016-08-01","2016-09-01","2016-10-01","2016-11-01","2016-12-01","2017-01-01","2017-02-01","2017-03-01","2017-04-01","2017-05-01","2017-06-01","2017-07-01","2017-08-01","2017-09-01","2017-10-01","2017-11-01","2017-12-01","2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01","2018-12-01","2018-11-01","2018-10-01","2018-09-01","2018-08-01","2018-07-01","2018-06-01","2018-05-01","2018-04-01","2018-03-01","2018-02-01","2018-01-01","2017-12-01","2017-11-01","2017-10-01","2017-09-01","2017-08-01","2017-07-01","2017-06-01","2017-05-01","2017-04-01","2017-03-01","2017-02-01","2017-01-01","2016-12-01","2016-11-01","2016-10-01","2016-09-01","2016-08-01","2016-07-01","2016-06-01","2016-05-01","2016-04-01","2016-03-01","2016-02-01","2016-01-01","2015-12-01","2015-11-01","2015-10-01","2015-09-01","2015-08-01","2015-07-01","2015-06-01","2015-05-01","2015-04-01","2015-03-01","2015-02-01","2015-01-01","2014-12-01","2014-11-01","2014-10-01","2014-09-01","2014-08-01","2014-07-01","2014-06-01","2014-05-01","2014-04-01","2014-03-01","2014-02-01","2014-01-01","2013-12-01","2013-11-01","2013-10-01","2013-09-01","2013-08-01","2013-07-01","2013-06-01","2013-05-01","2013-04-01","2013-03-01","2013-02-01","2013-01-01","2012-12-01","2012-11-01","2012-10-01","2012-09-01","2012-08-01","2012-07-01","2012-06-01","2012-05-01","2012-04-01","2012-03-01","2012-02-01","2012-01-01","2011-12-01","2011-11-01","2011-10-01","2011-09-01","2011-08-01","2011-07-01","2011-06-01","2011-05-01","2011-04-01","2011-03-01","2011-02-01","2011-01-01","2010-12-01","2010-11-01","2010-10-01","2010-09-01","2010-08-01","2010-07-01","2010-06-01","2010-05-01","2010-04-01","2010-03-01","2010-02-01","2010-01-01","2009-12-01","2009-11-01","2009-10-01","2009-09-01","2009-08-01","2009-07-01","2009-06-01","2009-05-01","2009-04-01","2009-03-01","2009-02-01","2009-01-01","2008-12-01","2008-11-01","2008-10-01","2008-09-01","2008-08-01","2008-07-01","2008-06-01","2008-05-01","2008-04-01","2008-03-01","2008-02-01","2008-01-01","2008-01-01"],"y":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"text":[".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL",".index: 2008-01-01<br />.value: 10315.00<br />.conf_lo:       NA<br />.conf_hi:       NA<br />.model_desc: ACTUAL"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(44,62,80,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"ACTUAL","legendgroup":"ACTUAL","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2019-01-01","2019-02-01","2019-03-01","2019-04-01","2019-05-01","2019-06-01","2019-07-01","2019-08-01","2019-09-01","2019-10-01","2019-11-01","2019-12-01","2019-12-01","2019-11-01","2019-10-01","2019-09-01","2019-08-01","2019-07-01","2019-06-01","2019-05-01","2019-04-01","2019-03-01","2019-02-01","2019-01-01","2019-01-01"],"y":[26964.686302438,29625.6562547463,30474.3554425897,35641.6999346035,34898.1382107452,48847.8106471745,56662.9279233653,40431.7449079026,30380.1315079449,30778.3516452426,29079.1010264708,33043.7824162551,48149.5222962832,44184.8409064989,45884.0915252707,45485.871387973,55537.4847879307,71768.6678033934,63953.5505272026,50003.8780907733,50747.4398146316,45580.0953226178,44731.3961347744,42070.4261824661,26964.686302438],"text":[".index: 2019-01-01<br />.value: 34517.56<br />.conf_lo: 26964.69<br />.conf_hi: 42070.43<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-02-01<br />.value: 37178.53<br />.conf_lo: 29625.66<br />.conf_hi: 44731.40<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-03-01<br />.value: 38027.23<br />.conf_lo: 30474.36<br />.conf_hi: 45580.10<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-04-01<br />.value: 43194.57<br />.conf_lo: 35641.70<br />.conf_hi: 50747.44<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-05-01<br />.value: 42451.01<br />.conf_lo: 34898.14<br />.conf_hi: 50003.88<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-06-01<br />.value: 56400.68<br />.conf_lo: 48847.81<br />.conf_hi: 63953.55<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-07-01<br />.value: 64215.80<br />.conf_lo: 56662.93<br />.conf_hi: 71768.67<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-08-01<br />.value: 47984.61<br />.conf_lo: 40431.74<br />.conf_hi: 55537.48<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-09-01<br />.value: 37933.00<br />.conf_lo: 30380.13<br />.conf_hi: 45485.87<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-10-01<br />.value: 38331.22<br />.conf_lo: 30778.35<br />.conf_hi: 45884.09<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-11-01<br />.value: 36631.97<br />.conf_lo: 29079.10<br />.conf_hi: 44184.84<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-12-01<br />.value: 40596.65<br />.conf_lo: 33043.78<br />.conf_hi: 48149.52<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-12-01<br />.value: 40596.65<br />.conf_lo: 33043.78<br />.conf_hi: 48149.52<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-11-01<br />.value: 36631.97<br />.conf_lo: 29079.10<br />.conf_hi: 44184.84<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-10-01<br />.value: 38331.22<br />.conf_lo: 30778.35<br />.conf_hi: 45884.09<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-09-01<br />.value: 37933.00<br />.conf_lo: 30380.13<br />.conf_hi: 45485.87<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-08-01<br />.value: 47984.61<br />.conf_lo: 40431.74<br />.conf_hi: 55537.48<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-07-01<br />.value: 64215.80<br />.conf_lo: 56662.93<br />.conf_hi: 71768.67<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-06-01<br />.value: 56400.68<br />.conf_lo: 48847.81<br />.conf_hi: 63953.55<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-05-01<br />.value: 42451.01<br />.conf_lo: 34898.14<br />.conf_hi: 50003.88<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-04-01<br />.value: 43194.57<br />.conf_lo: 35641.70<br />.conf_hi: 50747.44<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-03-01<br />.value: 38027.23<br />.conf_lo: 30474.36<br />.conf_hi: 45580.10<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-02-01<br />.value: 37178.53<br />.conf_lo: 29625.66<br />.conf_hi: 44731.40<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-01-01<br />.value: 34517.56<br />.conf_lo: 26964.69<br />.conf_hi: 42070.43<br />.model_desc: 1_ETS(M,A,M)",".index: 2019-01-01<br />.value: 34517.56<br />.conf_lo: 26964.69<br />.conf_hi: 42070.43<br />.model_desc: 1_ETS(M,A,M)"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(227,26,28,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"1_ETS(M,A,M)","legendgroup":"1_ETS(M,A,M)","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2019-01-01","2019-02-01","2019-03-01","2019-04-01","2019-05-01","2019-06-01","2019-07-01","2019-08-01","2019-09-01","2019-10-01","2019-11-01","2019-12-01","2019-12-01","2019-12-01","2019-11-01","2019-10-01","2019-09-01","2019-08-01","2019-07-01","2019-06-01","2019-05-01","2019-04-01","2019-03-01","2019-02-01","2019-01-01","2019-01-01"],"y":[24746.2661060001,25879.6168642278,27704.3687493847,32221.3368240432,35190.2835461492,46929.1427811337,54355.2706503869,40839.0179385199,30424.0828824715,29094.005110628,27708.8090232978,28874.3998634139,28874.3998634139,46468.4562659702,45302.8654258541,46688.0615131843,48018.1392850278,58433.0743410763,71949.3270529432,64523.19918369,52784.3399487055,49815.3932265995,45298.425151941,43473.6732667841,42340.3225085564,24746.2661060001],"text":[".index: 2019-01-01<br />.value: 33543.29<br />.conf_lo: 24746.27<br />.conf_hi: 42340.32<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-02-01<br />.value: 34676.65<br />.conf_lo: 25879.62<br />.conf_hi: 43473.67<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-03-01<br />.value: 36501.40<br />.conf_lo: 27704.37<br />.conf_hi: 45298.43<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-04-01<br />.value: 41018.37<br />.conf_lo: 32221.34<br />.conf_hi: 49815.39<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-05-01<br />.value: 43987.31<br />.conf_lo: 35190.28<br />.conf_hi: 52784.34<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-06-01<br />.value: 55726.17<br />.conf_lo: 46929.14<br />.conf_hi: 64523.20<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-07-01<br />.value: 63152.30<br />.conf_lo: 54355.27<br />.conf_hi: 71949.33<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-08-01<br />.value: 49636.05<br />.conf_lo: 40839.02<br />.conf_hi: 58433.07<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-09-01<br />.value: 39221.11<br />.conf_lo: 30424.08<br />.conf_hi: 48018.14<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-10-01<br />.value: 37891.03<br />.conf_lo: 29094.01<br />.conf_hi: 46688.06<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-11-01<br />.value: 36505.84<br />.conf_lo: 27708.81<br />.conf_hi: 45302.87<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-12-01<br />.value: 37671.43<br />.conf_lo: 28874.40<br />.conf_hi: 46468.46<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-12-01<br />.value: 37671.43<br />.conf_lo: 28874.40<br />.conf_hi: 46468.46<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-12-01<br />.value: 37671.43<br />.conf_lo: 28874.40<br />.conf_hi: 46468.46<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-11-01<br />.value: 36505.84<br />.conf_lo: 27708.81<br />.conf_hi: 45302.87<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-10-01<br />.value: 37891.03<br />.conf_lo: 29094.01<br />.conf_hi: 46688.06<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-09-01<br />.value: 39221.11<br />.conf_lo: 30424.08<br />.conf_hi: 48018.14<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-08-01<br />.value: 49636.05<br />.conf_lo: 40839.02<br />.conf_hi: 58433.07<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-07-01<br />.value: 63152.30<br />.conf_lo: 54355.27<br />.conf_hi: 71949.33<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-06-01<br />.value: 55726.17<br />.conf_lo: 46929.14<br />.conf_hi: 64523.20<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-05-01<br />.value: 43987.31<br />.conf_lo: 35190.28<br />.conf_hi: 52784.34<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-04-01<br />.value: 41018.37<br />.conf_lo: 32221.34<br />.conf_hi: 49815.39<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-03-01<br />.value: 36501.40<br />.conf_lo: 27704.37<br />.conf_hi: 45298.43<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-02-01<br />.value: 34676.65<br />.conf_lo: 25879.62<br />.conf_hi: 43473.67<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-01-01<br />.value: 33543.29<br />.conf_lo: 24746.27<br />.conf_hi: 42340.32<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-01-01<br />.value: 33543.29<br />.conf_lo: 24746.27<br />.conf_hi: 42340.32<br />.model_desc: 2_ARIMA(2,0,0)(2,1,0)[..."],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(24,188,156,0.2)","dash":"none"},"fill":"toself","fillcolor":"rgba(51,51,51,0.2)","hoveron":"points","name":"2_ARIMA(2,0,0)(2,1,0)[...","legendgroup":"2_ARIMA(2,0,0)(2,1,0)[...","showlegend":true,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2008-01-01","2008-02-01","2008-03-01","2008-04-01","2008-05-01","2008-06-01","2008-07-01","2008-08-01","2008-09-01","2008-10-01","2008-11-01","2008-12-01","2009-01-01","2009-02-01","2009-03-01","2009-04-01","2009-05-01","2009-06-01","2009-07-01","2009-08-01","2009-09-01","2009-10-01","2009-11-01","2009-12-01","2010-01-01","2010-02-01","2010-03-01","2010-04-01","2010-05-01","2010-06-01","2010-07-01","2010-08-01","2010-09-01","2010-10-01","2010-11-01","2010-12-01","2011-01-01","2011-02-01","2011-03-01","2011-04-01","2011-05-01","2011-06-01","2011-07-01","2011-08-01","2011-09-01","2011-10-01","2011-11-01","2011-12-01","2012-01-01","2012-02-01","2012-03-01","2012-04-01","2012-05-01","2012-06-01","2012-07-01","2012-08-01","2012-09-01","2012-10-01","2012-11-01","2012-12-01","2013-01-01","2013-02-01","2013-03-01","2013-04-01","2013-05-01","2013-06-01","2013-07-01","2013-08-01","2013-09-01","2013-10-01","2013-11-01","2013-12-01","2014-01-01","2014-02-01","2014-03-01","2014-04-01","2014-05-01","2014-06-01","2014-07-01","2014-08-01","2014-09-01","2014-10-01","2014-11-01","2014-12-01","2015-01-01","2015-02-01","2015-03-01","2015-04-01","2015-05-01","2015-06-01","2015-07-01","2015-08-01","2015-09-01","2015-10-01","2015-11-01","2015-12-01","2016-01-01","2016-02-01","2016-03-01","2016-04-01","2016-05-01","2016-06-01","2016-07-01","2016-08-01","2016-09-01","2016-10-01","2016-11-01","2016-12-01","2017-01-01","2017-02-01","2017-03-01","2017-04-01","2017-05-01","2017-06-01","2017-07-01","2017-08-01","2017-09-01","2017-10-01","2017-11-01","2017-12-01","2018-01-01","2018-02-01","2018-03-01","2018-04-01","2018-05-01","2018-06-01","2018-07-01","2018-08-01","2018-09-01","2018-10-01","2018-11-01","2018-12-01"],"y":[10315,13415,14320,15413,14424,21368,21994,19052,12680,14893,14379,16375,16022,15433,15136,18013,16461,22540,25817,19212,14828,17813,16747,18783,15781,16335,18061,22154,21461,28146,34020,25351,20105,20591,17991,23002,16891,22046,19430,21050,20422,30167,36526,23844,22842,20140,19790,23650,22637,22627,24102,25429,26039,32281,37527,27372,21864,22202,21804,24950,19793,24155,23807,27309,25326,33707,37861,28930,24113,24833,24109,25421,22967,27391,26405,26244,31407,40436,44613,35029,24965,26165,25635,27369,24906,23760,27347,31299,30131,38188,45043,32747,24834,26213,25102,27128,25981,29498,28805,34449,34454,43488,48958,38351,28041,27035,28643,31285,31125,28207,31443,33682,36844,50591,58349,43919,35317,33438,32527,33860,31432,35137,35832,41723,45269,55824,63476,49645,37341,36355,33356,33778],"text":[".index: 2008-01-01<br />.value: 10315.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-02-01<br />.value: 13415.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-03-01<br />.value: 14320.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-04-01<br />.value: 15413.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-05-01<br />.value: 14424.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-06-01<br />.value: 21368.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-07-01<br />.value: 21994.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-08-01<br />.value: 19052.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-09-01<br />.value: 12680.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-10-01<br />.value: 14893.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-11-01<br />.value: 14379.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2008-12-01<br />.value: 16375.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-01-01<br />.value: 16022.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-02-01<br />.value: 15433.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-03-01<br />.value: 15136.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-04-01<br />.value: 18013.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-05-01<br />.value: 16461.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-06-01<br />.value: 22540.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-07-01<br />.value: 25817.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-08-01<br />.value: 19212.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-09-01<br />.value: 14828.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-10-01<br />.value: 17813.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-11-01<br />.value: 16747.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2009-12-01<br />.value: 18783.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-01-01<br />.value: 15781.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-02-01<br />.value: 16335.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-03-01<br />.value: 18061.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-04-01<br />.value: 22154.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-05-01<br />.value: 21461.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-06-01<br />.value: 28146.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-07-01<br />.value: 34020.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-08-01<br />.value: 25351.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-09-01<br />.value: 20105.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-10-01<br />.value: 20591.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-11-01<br />.value: 17991.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2010-12-01<br />.value: 23002.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-01-01<br />.value: 16891.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-02-01<br />.value: 22046.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-03-01<br />.value: 19430.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-04-01<br />.value: 21050.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-05-01<br />.value: 20422.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-06-01<br />.value: 30167.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-07-01<br />.value: 36526.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-08-01<br />.value: 23844.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-09-01<br />.value: 22842.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-10-01<br />.value: 20140.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-11-01<br />.value: 19790.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2011-12-01<br />.value: 23650.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-01-01<br />.value: 22637.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-02-01<br />.value: 22627.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-03-01<br />.value: 24102.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-04-01<br />.value: 25429.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-05-01<br />.value: 26039.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-06-01<br />.value: 32281.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-07-01<br />.value: 37527.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-08-01<br />.value: 27372.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-09-01<br />.value: 21864.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-10-01<br />.value: 22202.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-11-01<br />.value: 21804.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2012-12-01<br />.value: 24950.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-01-01<br />.value: 19793.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-02-01<br />.value: 24155.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-03-01<br />.value: 23807.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-04-01<br />.value: 27309.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-05-01<br />.value: 25326.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-06-01<br />.value: 33707.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-07-01<br />.value: 37861.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-08-01<br />.value: 28930.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-09-01<br />.value: 24113.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-10-01<br />.value: 24833.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-11-01<br />.value: 24109.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2013-12-01<br />.value: 25421.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-01-01<br />.value: 22967.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-02-01<br />.value: 27391.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-03-01<br />.value: 26405.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-04-01<br />.value: 26244.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-05-01<br />.value: 31407.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-06-01<br />.value: 40436.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-07-01<br />.value: 44613.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-08-01<br />.value: 35029.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-09-01<br />.value: 24965.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-10-01<br />.value: 26165.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-11-01<br />.value: 25635.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2014-12-01<br />.value: 27369.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-01-01<br />.value: 24906.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-02-01<br />.value: 23760.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-03-01<br />.value: 27347.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-04-01<br />.value: 31299.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-05-01<br />.value: 30131.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-06-01<br />.value: 38188.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-07-01<br />.value: 45043.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-08-01<br />.value: 32747.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-09-01<br />.value: 24834.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-10-01<br />.value: 26213.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-11-01<br />.value: 25102.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2015-12-01<br />.value: 27128.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-01-01<br />.value: 25981.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-02-01<br />.value: 29498.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-03-01<br />.value: 28805.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-04-01<br />.value: 34449.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-05-01<br />.value: 34454.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-06-01<br />.value: 43488.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-07-01<br />.value: 48958.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-08-01<br />.value: 38351.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-09-01<br />.value: 28041.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-10-01<br />.value: 27035.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-11-01<br />.value: 28643.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2016-12-01<br />.value: 31285.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-01-01<br />.value: 31125.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-02-01<br />.value: 28207.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-03-01<br />.value: 31443.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-04-01<br />.value: 33682.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-05-01<br />.value: 36844.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-06-01<br />.value: 50591.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-07-01<br />.value: 58349.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-08-01<br />.value: 43919.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-09-01<br />.value: 35317.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-10-01<br />.value: 33438.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-11-01<br />.value: 32527.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2017-12-01<br />.value: 33860.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-01-01<br />.value: 31432.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-02-01<br />.value: 35137.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-03-01<br />.value: 35832.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-04-01<br />.value: 41723.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-05-01<br />.value: 45269.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-06-01<br />.value: 55824.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-07-01<br />.value: 63476.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-08-01<br />.value: 49645.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-09-01<br />.value: 37341.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-10-01<br />.value: 36355.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-11-01<br />.value: 33356.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL",".index: 2018-12-01<br />.value: 33778.00<br />.color_mod: ACTUAL<br />.color_mod: ACTUAL"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(44,62,80,1)","dash":"solid"},"hoveron":"points","name":"ACTUAL","legendgroup":"ACTUAL","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2019-01-01","2019-02-01","2019-03-01","2019-04-01","2019-05-01","2019-06-01","2019-07-01","2019-08-01","2019-09-01","2019-10-01","2019-11-01","2019-12-01"],"y":[34517.5562424521,37178.5261947604,38027.2253826038,43194.5698746176,42451.0081507592,56400.6805871886,64215.7978633794,47984.6148479166,37933.001447959,38331.2215852567,36631.9709664848,40596.6523562692],"text":[".index: 2019-01-01<br />.value: 34517.56<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-02-01<br />.value: 37178.53<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-03-01<br />.value: 38027.23<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-04-01<br />.value: 43194.57<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-05-01<br />.value: 42451.01<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-06-01<br />.value: 56400.68<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-07-01<br />.value: 64215.80<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-08-01<br />.value: 47984.61<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-09-01<br />.value: 37933.00<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-10-01<br />.value: 38331.22<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-11-01<br />.value: 36631.97<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)",".index: 2019-12-01<br />.value: 40596.65<br />.color_mod: 1_ETS(M,A,M)<br />.color_mod: 1_ETS(M,A,M)"],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(227,26,28,1)","dash":"solid"},"hoveron":"points","name":"1_ETS(M,A,M)","legendgroup":"1_ETS(M,A,M)","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null},{"x":["2019-01-01","2019-02-01","2019-03-01","2019-04-01","2019-05-01","2019-06-01","2019-07-01","2019-08-01","2019-09-01","2019-10-01","2019-11-01","2019-12-01"],"y":[33543.2943072783,34676.645065506,36501.3969506628,41018.3650253214,43987.3117474274,55726.1709824119,63152.298851665,49636.0461397981,39221.1110837497,37891.0333119062,36505.8372245759,37671.4280646921],"text":[".index: 2019-01-01<br />.value: 33543.29<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-02-01<br />.value: 34676.65<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-03-01<br />.value: 36501.40<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-04-01<br />.value: 41018.37<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-05-01<br />.value: 43987.31<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-06-01<br />.value: 55726.17<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-07-01<br />.value: 63152.30<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-08-01<br />.value: 49636.05<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-09-01<br />.value: 39221.11<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-10-01<br />.value: 37891.03<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-11-01<br />.value: 36505.84<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...",".index: 2019-12-01<br />.value: 37671.43<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[...<br />.color_mod: 2_ARIMA(2,0,0)(2,1,0)[..."],"type":"scatter","mode":"lines","line":{"width":1.88976377952756,"color":"rgba(24,188,156,1)","dash":"solid"},"hoveron":"points","name":"2_ARIMA(2,0,0)(2,1,0)[...","legendgroup":"2_ARIMA(2,0,0)(2,1,0)[...","showlegend":false,"xaxis":"x","yaxis":"y","hoverinfo":"text","frame":null}],"layout":{"margin":{"t":52.320939334638,"r":7.30593607305936,"b":34.1291585127202,"l":40.1826484018265},"plot_bgcolor":"rgba(255,255,255,1)","paper_bgcolor":"rgba(255,255,255,1)","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187},"title":{"text":"Forecast Plot","font":{"color":"rgba(44,62,80,1)","family":"","size":17.5342465753425},"x":0,"xref":"paper"},"xaxis":{"domain":[0,1],"automargin":true,"type":"date","autorange":true,"range":["2007-05-28","2020-07-05"],"tickmode":"auto","ticktext":["2010","2015","2020"],"tickvals":[14610,16436,18262],"categoryorder":"array","categoryarray":["2010","2015","2020"],"nticks":null,"ticks":"outside","tickcolor":"rgba(204,204,204,1)","ticklen":3.65296803652968,"tickwidth":0.22139200221392,"showticklabels":true,"tickfont":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(204,204,204,1)","gridwidth":0.22139200221392,"zeroline":false,"anchor":"y","title":{"text":"","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"yaxis":{"domain":[0,1],"automargin":true,"type":"linear","autorange":true,"range":[7233.28364735284,75031.0434055903],"tickmode":"auto","ticktext":["20000","40000","60000"],"tickvals":[20000,40000,60000],"categoryorder":"array","categoryarray":["20000","40000","60000"],"nticks":null,"ticks":"outside","tickcolor":"rgba(204,204,204,1)","ticklen":3.65296803652968,"tickwidth":0.22139200221392,"showticklabels":true,"tickfont":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"tickangle":-0,"showline":false,"linecolor":null,"linewidth":0,"showgrid":true,"gridcolor":"rgba(204,204,204,1)","gridwidth":0.22139200221392,"zeroline":false,"anchor":"x","title":{"text":"","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}},"hoverformat":".2f"},"shapes":[{"type":"rect","fillcolor":"transparent","line":{"color":"rgba(44,62,80,1)","width":0.33208800332088,"linetype":"solid"},"yref":"paper","xref":"paper","x0":0,"x1":1,"y0":0,"y1":1}],"showlegend":true,"legend":{"bgcolor":"rgba(255,255,255,1)","bordercolor":"transparent","borderwidth":1.88976377952756,"font":{"color":"rgba(44,62,80,1)","family":"","size":11.689497716895},"title":{"text":"Legend","font":{"color":"rgba(44,62,80,1)","family":"","size":14.6118721461187}}},"hovermode":"closest","barmode":"relative"},"config":{"doubleClick":"reset","modeBarButtonsToAdd":["hoverclosest","hovercompare"],"showSendToCloud":false},"source":"A","attrs":{"72c813671d53":{"x":{},"y":{},"ymin":{},"ymax":{},"colour":{},"type":"scatter"},"72c8593d2f48":{"x":{},"y":{},"colour":{}}},"cur_data":"72c813671d53","visdat":{"72c813671d53":["function (y) ","x"],"72c8593d2f48":["function (y) ","x"]},"highlight":{"on":"plotly_click","persistent":false,"dynamic":false,"selectize":false,"opacityDim":0.2,"selected":{"opacity":1},"debounce":0},"shinyEvents":["plotly_hover","plotly_click","plotly_selected","plotly_relayout","plotly_brushed","plotly_brushing","plotly_clickannotation","plotly_doubleclick","plotly_deselect","plotly_afterplot","plotly_sunburstclick"],"base_url":"https://plot.ly"},"evals":[],"jsHooks":[]}</script>
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>

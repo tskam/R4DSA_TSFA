@@ -46,6 +46,20 @@ By the end of this session, you will be able to:
 ]
 
 ---
+## Getting to Know the Time Series Forecasting Methods
+
++ Exponential Smoothing: Based on the based on a description of the *trend* and *seasonality* in the time series data. 
++ ARIMA: Based on the *autocorrelations* in the time series data.
+
+.center[
+![:scale 50%](img/image3.jpg)
+]
+
+.small[
+Source: [*"9.10 ARIMA vs ETS"*](https://otexts.com/fpp3/arima-ets.html) of Rob J Hyndman and George Athanasopoulos (2022) **Forecasting: Principles and Practice** (3rd ed) (online version)]
+
+
+---
 # Getting Started
 
 .pull-left[
@@ -54,20 +68,17 @@ For the purpose of this hands-on exercise, the following R packages will be used
 ```{r}
 pacman::p_load(tidyverse, lubridate, zoo, 
                timetk, modeltime, seasonal,
-               tsibble, feasts, fable)
+               tsibble, feasts, fable,
+               tidymodels)
 ```
 
-+ [**lubridate**](https://lubridate.tidyverse.org/) provides a collection to functions to parse and wrangle time and date data.
-+ [**zoo**](https://cran.r-project.org/web/packages/zoo/) provides an S3 class with methods for indexed totally ordered observations, such as discrete irregular time series.
-+ [**timetk**](https://business-science.github.io/timetk/reference/index.html) provides methods for analysing and visualising time series data stored in tibble data frame object.
-+ [**seasonal**](https://cran.r-project.org/web/packages/seasonal/index.html) provides easy-to-use interface to X-13-ARIMA-SEATS.
+Two R packages are added in the list, they are:
++ [**fable**](https://lubridate.tidyverse.org/) provides a collection of commonly used univariate and multivariate time series forecasting models including exponential smoothing via state space models and automatic ARIMA modelling. It is a tidy version of the popular [**forecast**](https://cran.r-project.org/web/packages/forecast/index.html) package and a member of [**tidyverts**](https://tidyverts.org/).
 ]
 
 .pull-right[
-+ tsibble, feasts, fable and fable.prophet are belong to [**tidyverts**](https://tidyverts.org/), a family of tidy tools for time series data handling, analysis and forecasting.
-    + [**tsibble**](https://tsibble.tidyverts.org/) provides a data infrastructure for tidy temporal data with wrangling tools. Adapting the tidy data principles, tsibble is a data- and model-oriented object.
-    + [**feasts**](https://feasts.tidyverts.org/) provides a collection of tools for the analysis of time series data. The package name is an acronym comprising of its key features: Feature Extraction And Statistics for Time Series.
-+ [**trelliscopejs**](https://hafen.github.io/trelliscopejs/index.html) is an interface for creating Trelliscope displays in R environment.
++ [**modeltime**](https://business-science.github.io/modeltime/index.html) a new time series forecasting package designed to speed up model evaluation, selection, and forecasting. modeltime does this by integrating the [**tidymodels**](https://www.tidymodels.org/) machine learning ecosystem of packages into a streamlined workflow for tidyverse
+forecasting. 
 ]
 
 ---
@@ -90,12 +101,387 @@ tsbl_longer <- read_rds(
 ```
 ]
 
---
+
+---
+## Exponential Smoothing
+
+.pull-left[
+Exponential smoothing methods are weighted averages of past observations, with the weights decaying exponentially as the observations get more remote. Exponential smoothing is a family of methods that vary by their trend and seasonal components.
+
++ There can be no trend (N), an additive (A) linear trend from the forecast horizon, or a damped additive (Ad) trend leveling off from the forecast horizon. The trend could also be multiplicative (M) or multiplicative damped (Md), but Hyndman explains that they do not produced good forecasts.
++ There can be no seasonality (N), or it can be additive (A) change, or multiplicative (M) (proportional) change. Apparently seasonality does not have an additive damped version.
+]
+
 .pull-right[
-In the code chunk below, `dmy()` of **lubridate** package is used to convert data type of Month-Year field from Character to Date.
+![:scale 80%](img/image2.jpg)
+]
+
+---
+## What is Stationary in Time Series?
+
+.pull-left[
+A *stationary* time series is one whose statistical properties do not depend on the time at which the series is observed. Thus, time series with trends, or with seasonality, are not stationary. On the other hand, a white noise series is stationary.  
+
+Figure on the right shows that the monthly visitor arrivals from Vietnam by air are non-stationary.
+]
+
+.pull-right[
+```{r echo=FALSE, fig.height=5}
+tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  autoplot()
+```
+
+In general, a stationary time series will have no predictable patterns in the long-term.
+]
+
+---
+### What is differencing?
+
+On way to make a time series non-stationary is to compute the differences between consecutive observations. This is known as **differencing**.  Differencing can help stabilise the mean of a time series by removing changes in the level of a time series, and therefore eliminating (or reducing) trend and seasonality.
 
 ```{r}
-ts_data$`Month-Year` <- dmy(
-  ts_data$`Month-Year`)
+vietnam <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  mutate(Arrival_lag1 = difference(Arrivals,
+                           lag = 1))
+```
+
+```{r}
+vietnam <- vietnam %>%
+  mutate(Arrival_diff1 = difference(Arrivals,
+                           differences = 12))
+```
+
+
+```{r}
+vietnam %>%
+  filter(Country == "Vietnam") %>%
+  gg_tsdisplay(Arrivals,
+    plot_type='partial')
+```
+
+---
+
+.pull-left[
+```{r}
+tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  gg_tsdisplay(difference(
+    Arrivals,
+    lag = 1), 
+    plot_type='partial')
 ```
 ]
+
+.pull-right[
+```{r}
+tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  gg_tsdisplay(difference(
+    Arrivals,
+    difference = 6), 
+    plot_type='partial')
+```
+
+
+]
+
+The PACF is suggestive of an AR(1) model; so an initial candidate model is an ARIMA(1,1,0). The ACF suggests an MA(1) model; so an alternative candidate is an ARIMA(0,1,1).
+
+---
+## Uni Time Series Forecasting: 
+
+```{r eval=FALSE}
+fit <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  model(
+    arima110 = ARIMA(Arrivals ~ pdq(1,1,0)),
+    arima011 = ARIMA(Arrivals ~ pdq(0,1,1)),
+    search = ARIMA(Arrivals, stepwise=FALSE)
+  )
+fit
+```
+
+---
+
+```{r eval=FALSE}
+fit %>% pivot_longer(!Country, 
+                     names_to = "Model name",
+                     values_to = "Orders")
+```
+---
+
+```{r eval=FALSE}
+glance(fit) %>% 
+  arrange(AICc) %>% 
+  select(.model:BIC)
+```
+
+---
+
+```{r}
+vietnam <- tbl_longer %>%
+  filter(Country == "Vietnam")
+```
+
+---
+Data Sampling
+
+Let’s split the data into training and test sets using `initial_time_split()`
+
+---
+# Split Data 80/20
+
+```{r eval=FALSE}
+splits <- vietnam %>%
+  initial_time_split(prop = 0.92)
+```
+
+
+---
+## Exponential Smoothing: fable methods
+
+.pull-left[
+In fable, exponential smoothing is supported by [`ETS()`](https://fable.tidyverts.org/reference/ETS.html). The combinations are specified through the formula:
+
+```{r eval=FALSE}
+ETS(y ~ error(c("A", "M")) 
+    + trend(c("N", "A", "Ad")) 
+    + season(c("N", "A", "M"))
+```
+]
+
+---
+
+
+
+---
+### Simple exponential smoothing
+
+.pull-left[
+```{r}
+Vietnam_ses <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  model(ETS(Arrivals ~ error("A") 
+            + trend("N") 
+            + season("N")))
+Vietnam_ses %>% report()
+```
+]
+
+.pull-right[
+Check the model assumptions with residuals plots.
+
+```{r fig.height=7}
+gg_tsresiduals(Vietnam_ses)
+```
+]
+
+
+---
+### Simple exponential smoothing
+
+Then, forecast() is used to forecast next 12 months values.
+
+```{r}
+Vietnam_ses_fc <- Vietnam_ses %>%
+  forecast(h = "1 year")
+Vietnam_ses_fc
+```
+
+
+
+
+
+
+
+---
+### Holt’s Linear Method
+
+```{r}
+Vietnam_WH <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  model(
+    Additive = ETS(Arrivals ~ error("A") 
+                   + trend("A") 
+                   + season("A")),
+    Multiplicative = ETS(Arrivals ~ error("M") 
+                         + trend("A") 
+                         + season("M"))
+    )
+
+Vietnam_WH %>% report()
+```
+]
+
+---
+### Auto ETS
+
+```{r}
+Vietnam_autoETS <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  model(ETS(Arrivals))
+
+Vietnam_autoETS %>% report()
+```
+
+---
+### 
+
+Check the model assumptions with residuals plots.
+
+.pull-left[
+```{r fig.height=7}
+gg_tsresiduals(Vietnam_autoETS)
+```
+]
+
+
+---
+### Auto ETS
+
+```{r}
+UK_autoETS <- tsbl_longer %>%
+  filter(Country == "United Kingdom") %>%
+  model(ETS(Arrivals ~ season("M")))
+
+UK_autoETS
+```
+
+---
+## Time Series Forecasting: modeltime methods
+
+.pull-left[
+
++ Collect data and split into training and test sets
++ Create & Fit Multiple Models
++ Add fitted models to a Model Table
++ Calibrate the models to a testing set.
++ Perform Testing Set Forecast & Accuracy Evaluation
++ Refit the models to Full Dataset & Forecast Forward
+]
+
+---
+### Step 1: Data sampling
+
+.pull-left[
+Extracting data for model calibration.
+
+```{r}
+vietnam <- tbl_longer %>%
+  filter(Country == "Vietnam" &
+         `Month-Year` < "2019-01-01")
+vietnam_holdup <- tbl_longer %>%
+  filter(Country == "Vietnam" &
+         `Month-Year` >= "2019-01-01")
+```
+]
+
+.pull-right[
+Let’s split the data into training and test sets using `initial_time_split()`
+
+```{r}
+vietnam_splits <- initial_time_split(
+  vietnam, prop = 0.91)
+vietnam_train <- training(vietnam_splits)
+vietnam_test <- testing(vietnam_splits)
+```
+]
+
+---
+### Step 2 - Create & Fit Multiple Models
+
+.pull-left[
+We can easily create dozens of forecasting models by combining modeltime and parsnip. We can also use the workflows interface for adding preprocessing! Your forecasting possibilities are endless. Let’s get a few basic models developed:
+
+Model 1: Exponential Smoothing (Modeltime)
+
+Next, create an Error-Trend-Season (ETS) model using an Exponential Smoothing State Space model. This is accomplished with exp_smoothing().
+
+```{r}
+model_fit_ets <- exp_smoothing() %>%
+    set_engine(engine = "ets") %>%
+    fit(Arrivals ~ `Month-Year`, 
+        data = training(vietnam_splits))
+```
+]
+
+.pull-right[
+Model 2: Auto ARIMA (Modeltime)
+
+First, we create a basic univariate ARIMA model using “Auto Arima” using arima_reg()
+
+```{r}
+model_fit_arima <- arima_reg() %>%
+  set_engine(engine = "auto_arima") %>%
+  fit(Arrivals ~ `Month-Year`, 
+      data = training(vietnam_splits))
+```
+]
+
+---
+### Step 3 - Add fitted models to a Model Table
+
+```{r}
+models_tbl <- modeltime_table(
+  model_fit_ets,
+  model_fit_arima)
+
+models_tbl
+```
+
+---
+### Step 4 - Calibrate the model to a testing set
+
+```{r}
+calibration_tbl <- models_tbl %>%
+    modeltime_calibrate(new_data = testing(vietnam_splits))
+
+calibration_tbl
+```
+
+---
+### Step 5 - Testing Set Forecast & Accuracy Evaluation
+
+5A - Visualizing the Forecast Test
+
+```{r}
+calibration_tbl %>%
+  modeltime_forecast(
+    new_data = testing(vietnam_splits),
+    actual_data = vietnam) %>%
+  plot_modeltime_forecast(
+    .legend_max_width = 25, 
+    .interactive = TRUE)
+```
+
+---
+### Step 5 - Testing Set Forecast & Accuracy Evaluation
+
+5B - Accuracy Metrics
+
+```{r}
+calibration_tbl %>%
+  modeltime_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+
+---
+### Step 6 - Refit to Full Dataset & Forecast Forward
+
+The final step is to refit the models to the full dataset using modeltime_refit() and forecast them forward.
+
+```{r}
+refit_tbl <- calibration_tbl %>%
+    modeltime_refit(data = vietnam)
+
+refit_tbl %>%
+    modeltime_forecast(
+      h = "12 months",
+      actual_data = vietnam) %>%
+  plot_modeltime_forecast(
+    .legend_max_width = 25, 
+    .interactive = TRUE)
+```
