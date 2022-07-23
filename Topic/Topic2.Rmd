@@ -1,5 +1,5 @@
 ---
-title: "Tidy Time Series Forecasting"
+title: "Tidy Time Series Forecasting: fable methods"
 subtitle: ""
 author: "Dr. Kam Tin Seong<br/>Assoc. Professor of Information Systems"
 institute: "School of Computing and Information Systems,<br/>Singapore Management University"
@@ -37,12 +37,19 @@ style_duo_accent(
 # Content
 
 .large[
-By the end of this session, you will be able to:
+In this topic, you will learn the basic principles and methods of time series forecasting.
 
-- import and wrangling time-series data by using appropriate tidyverse methods,
-- visualise and analyse time-series data,
-- calibrate time-series forecasting models by using exponential smoothing and ARIMA techniques, and
-- compare and evaluate the performance of forecasting models.
+- Exponential Smoothing State Space Models (ETS)
+- AutoRegressive Integrated Moving Average(ARIMA)
+    - Stationary
+    - Differencing
+    
+At the same time, you will gain hands-on experience on using:
+
+- functions in **feasts** package to visualise, explore and detect time series patterns,
+- functions in **fable** package fit time series forecasting model by using manual and automatic methods,
+- functions in **fabletools** package to analyse the models including model comparison,
+- functions in **fable** package to forecast the future values of the time series.
 ]
 
 ---
@@ -58,50 +65,14 @@ By the end of this session, you will be able to:
 .small[
 Source: [*"9.10 ARIMA vs ETS"*](https://otexts.com/fpp3/arima-ets.html) of Rob J Hyndman and George Athanasopoulos (2022) **Forecasting: Principles and Practice** (3rd ed) (online version)]
 
-
 ---
-# Getting Started
+class: center, middle
 
-.pull-left[
-For the purpose of this hands-on exercise, the following R packages will be used.
+# Exponential Smoothing State Space Models (ETS) for Time Series Forecasting 
 
-```{r}
-pacman::p_load(tidyverse, lubridate, zoo, 
-               timetk, modeltime, seasonal,
-               tsibble, feasts, fable,
-               tidymodels)
-```
-
-Two R packages are added in the list, they are:
-+ [**fable**](https://lubridate.tidyverse.org/) provides a collection of commonly used univariate and multivariate time series forecasting models including exponential smoothing via state space models and automatic ARIMA modelling. It is a tidy version of the popular [**forecast**](https://cran.r-project.org/web/packages/forecast/index.html) package and a member of [**tidyverts**](https://tidyverts.org/).
+.center[
+![:scale 50%](img/image1.jpg)
 ]
-
-.pull-right[
-+ [**modeltime**](https://business-science.github.io/modeltime/index.html) a new time series forecasting package designed to speed up model evaluation, selection, and forecasting. modeltime does this by integrating the [**tidymodels**](https://www.tidymodels.org/) machine learning ecosystem of packages into a streamlined workflow for tidyverse
-forecasting. 
-]
-
----
-## Importing the data
-
-.pull-left[
-Two data sets will be used in this hands-on exercise.  They are:
-
-+ *tbl_longer*: Visitor arrivals data set in tibble data frame format, and
-+ *tsbl_longer*: Visitor arrivals data set in tsibble data frame format. 
-
-In the code chunk below, read_rds() of readr package is used to import both data sets into R environment.
-
-```{r}
-tbl_longer <- read_rds(
-  "data/tbl_longer.rds")
-tsbl_longer <- read_rds(
-  "data/tsbl_longer.rds"
-)
-```
-]
-
-
 ---
 ## Exponential Smoothing
 
@@ -117,133 +88,302 @@ Exponential smoothing methods are weighted averages of past observations, with t
 ]
 
 ---
+### EDA methods for detecting trend, seasonality and errors: STL
+
+.pull-left[
+![](img/image16a.png)
+]
+
+.pull-right[
+![](img/image16b.png)
+]
+
+---
+class: center, middle
+
+# AutoRegressive Integrated Moving Average(ARIMA) Methods for Time Series Forecasting 
+
+---
+## AutoRegressive Integrated Moving Average (ARIMA) models: An overview 
+
+.pull-left[
+ARIMA models are used to forecast the observation at (t+1) based on the historical data of previous time spots recorded for the same observation. 
+
+The key aspects of ARIMA model are the following:
+
++ AR: Autoregression. This indicates that the time series is regressed on its own lagged values.
++ I: Integrated: This indicates that the data values have been replaced with the difference between their values and the previous values in order to convert the series into stationary.
++ MA: Moving Average. This indicates that the regression error is actually a linear combination of error terms whose values occurred contemporaneously and at various times in the past.
+]
+
+---
+## ARIMA models: Basic Principles
+
+.pull-left[
+The ARIMA model can be applied when we have seasonal or non-seasonal data. The difference is that when we have seasonal data we need to add some more parameters to the model.
+
+![](img/image7.jpg)
+]
+
+.pull-right[
+
+For non-seasonal data the parameters are:
+
++ p: The number of lag observations the model will use
++ d: The number of times that the raw observations are differenced till stationarity.
++ q: The size of the moving average window.
+
+For seasonal data we need to add also the following:
+
++ P: The number of seasonal lag observations the model will use
++ D: The number of times that the seasonal observations are differenced till stationarity.
++ Q: The size of the seasonal moving average window.
++ m: The number of observations of 1 season
+]
+
+---
+### Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF)
+
+.pull-left[
+ACF and PACF plots are the two most used methods for choosing the best q and p values from them.
+
+![](img/image9.png)
+]
+
+.pull-right[
+The ACF plots the correlation coefficient against the lag, which is measured in terms of a number of periods or units. A lag corresponds to a certain point in time after which we observe the first value in the time series.
+
+PACF is a statistical measure that captures the correlation between two variables after controlling for the effects of other variables. In short, a PACF captures a “direct” correlation between time series and a lagged version of itself.
+]
+
+---
+### Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF)
+
+.pull-left[
+ACF and PACF plots are the two most used methods for choosing the best q and p values from them.
+
+![](img/image9.png)
+]
+
+.pull-right[
++ When data have a trend, the autocorrelations for small lags tend to be large and positive because observations nearby in time are also nearby in value. So the ACF of a trended time series tends to have positive values that slowly decrease as the lags increase.
++ When data are seasonal, the autocorrelations will be larger for the seasonal lags (at multiples of the seasonal period) than for other lags.
++ When data are both trended and seasonal, you see a combination of these effects. The visitor from Vietnam data plotted on left shows both trend and seasonality. The slow decrease in the ACF as the lags increase is due to the trend, while the “scalloped” shape is due to the seasonality.
+]
+
+---
+### AR Model Fit
+
+.center[
+![:scale 35%](img/image11a.jpg)
+
+
+![:scale 70%](img/image11.jpg)
+]
+
++ When the autocorrelation coefficients gradually fall to 0, and the partial correlation has spikes, an AR model is appropriate. The order of the model depends on the number of spikes.
++ Figure above reveals an *AR(2)* model.
+
+---
+### MA Model Fit
+
+.center[
+![:scale 35%](img/image10a.jpg)
+
+![:scale 70%](img/image10.jpg)
+]
+
++ When the partial correlation coefficients gradually fall to 0, and the autocorrelation has spikes, a MA model is appropriate. The order of the model depends on the number of spikes. 
++ Figure above shows a *MA(1)* model.
+ 
+---
+### ARIMA Model Fit
+
+.center[
+![:scale 55%](img/image12a.jpg)
+
+![:scale 70%](img/image12.jpg)
+]
+
++ When both the autocorrelation and the partial correlograms show irregular patterns, then an ARIMA model is appropriate. The order of the model depends on the number of spikes.
++ Figure above reveals an *ARIMA(1,0,1)*.
+
+---
 ## What is Stationary in Time Series?
 
 .pull-left[
-A *stationary* time series is one whose statistical properties do not depend on the time at which the series is observed. Thus, time series with trends, or with seasonality, are not stationary. On the other hand, a white noise series is stationary.  
+A **stationary** time series is one whose statistical properties do not depend on the time at which the series is observed. Thus, time series with trends, or with seasonality, are not stationary. On the other hand, a white noise series is stationary.  
 
 Figure on the right shows that the monthly visitor arrivals from Vietnam by air are non-stationary.
 ]
 
 .pull-right[
-```{r echo=FALSE, fig.height=5}
-tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  autoplot()
-```
+![](img/image8.png)
 
-In general, a stationary time series will have no predictable patterns in the long-term.
+
+In general, it is necessary to make sure that the time series is stationary over the historical data of observation overtime period. If the time series is not stationary then we could apply the **differencing** factor on the records and see if the graph of the time series is a stationary overtime period.
 ]
 
 ---
-### What is differencing?
-
-On way to make a time series non-stationary is to compute the differences between consecutive observations. This is known as **differencing**.  Differencing can help stabilise the mean of a time series by removing changes in the level of a time series, and therefore eliminating (or reducing) trend and seasonality.
-
-```{r}
-vietnam <- tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  mutate(Arrival_lag1 = difference(Arrivals,
-                           lag = 1))
-```
-
-```{r}
-vietnam <- vietnam %>%
-  mutate(Arrival_diff1 = difference(Arrivals,
-                           differences = 12))
-```
-
-
-```{r}
-vietnam %>%
-  filter(Country == "Vietnam") %>%
-  gg_tsdisplay(Arrivals,
-    plot_type='partial')
-```
-
----
+## What is differencing?
 
 .pull-left[
-```{r}
-tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  gg_tsdisplay(difference(
-    Arrivals,
-    lag = 1), 
-    plot_type='partial')
-```
+On way to make a time series non-stationary is to compute the differences between consecutive observations. This is known as **differencing**.  Differencing can help stabilise the mean of a time series by removing changes in the level of a time series, and therefore eliminating (or reducing) trend and seasonality.
 ]
 
-.pull-right[
-```{r}
-tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  gg_tsdisplay(difference(
-    Arrivals,
-    difference = 6), 
-    plot_type='partial')
-```
+---
+### Differencing methods
 
+.pull-left[
+#### Trend differencing
+.center[
+![:scale 40%](img/image14a.jpg)]
+
+![](img/image13a.png)
+]
+
+--
+.pull-right[
+#### Seasonal differencing
+
+.center[
+![:scale 40%](img/image14b.jpg)]
+![](img/image13b.png)
 
 ]
 
 The PACF is suggestive of an AR(1) model; so an initial candidate model is an ARIMA(1,1,0). The ACF suggests an MA(1) model; so an alternative candidate is an ARIMA(0,1,1).
 
 ---
-## Uni Time Series Forecasting: 
+### Where are the equivalence relationships between ETS and ARIMA models? 
 
-```{r eval=FALSE}
-fit <- tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  model(
-    arima110 = ARIMA(Arrivals ~ pdq(1,1,0)),
-    arima011 = ARIMA(Arrivals ~ pdq(0,1,1)),
-    search = ARIMA(Arrivals, stepwise=FALSE)
-  )
-fit
-```
+.center[
+![:scale 80%](img/image4.jpg)
+]
+
+.small[
+Source: [*"9.10 ARIMA vs ETS"*](https://otexts.com/fpp3/arima-ets.html) of Rob J Hyndman and George Athanasopoulos (2022) **Forecasting: Principles and Practice** (3rd ed) (online version)]
 
 ---
-
-```{r eval=FALSE}
-fit %>% pivot_longer(!Country, 
-                     names_to = "Model name",
-                     values_to = "Orders")
-```
----
-
-```{r eval=FALSE}
-glance(fit) %>% 
-  arrange(AICc) %>% 
-  select(.model:BIC)
-```
-
----
-
-```{r}
-vietnam <- tbl_longer %>%
-  filter(Country == "Vietnam")
-```
-
----
-Data Sampling
-
-Let’s split the data into training and test sets using `initial_time_split()`
-
----
-# Split Data 80/20
-
-```{r eval=FALSE}
-splits <- vietnam %>%
-  initial_time_split(prop = 0.92)
-```
-
-
----
-## Exponential Smoothing: fable methods
+## Setting Up R Environment
 
 .pull-left[
-In fable, exponential smoothing is supported by [`ETS()`](https://fable.tidyverts.org/reference/ETS.html). The combinations are specified through the formula:
+For the purpose of this hands-on exercise, the following R packages will be used.
+
+```{r}
+pacman::p_load(tidyverse, lubridate, zoo, 
+               seasonal, tsibble, feasts, 
+               fable)
+```
+
+Two R packages are added in the list, they are:
++ [**fable**](https://lubridate.tidyverse.org/) provides a collection of commonly used univariate and multivariate time series forecasting models including exponential smoothing via state space models and automatic ARIMA modelling. It is a tidy version of the popular [**forecast**](https://cran.r-project.org/web/packages/forecast/index.html) package and a member of [**tidyverts**](https://tidyverts.org/).
+]
+
+.pull-right[
++ [**fabletools**](https://fabletools.tidyverts.org/index.html) provides tools for building modelling packages, with a focus on time series forecasting. This package allows package developers to extend fable with additional models, without needing to depend on the models supported by fable.  
+]
+
+---
+## Importing the data
+
+.pull-left[
+For the purpose of this hands-on session, visitor arrivals data to Singapore between from Jan 2008 until Dec 2019 will be used.
+
++ *tsbl_longer*: Visitor arrivals data set in tsibble data frame format.  It is in rds format. 
+
+In the code chunk below, `read_rds()` of **readr** package is used to import both data sets into R environment.
+
+```{r}
+tsbl_longer <- read_rds(
+  "data/tsbl_longer.rds")
+```
+]
+
+---
+## Time Series Forecasting Processes
+
+.center[
+![:scale 20%](img/image5.jpg)
+]
+
+---
+class: center, middle
+
+# Time Series Forecasting: fable (tidyverts) methods
+
+![:scale 35%](img/image15.jpg)
+
+---
+### Time Series Data Sampling
+
+.pull-left[
+In forecasting, we will split the time series into two parts.  The first part is called **estimate sample** (also known as training data).  It will be used to estimate the starting values and the smoothing parameters.  This sample typically contains 75-80 percent of the observation, although the forecaster may choose to use a smaller percentage for longer series.  
+The second part of the time series is called **hold-out sample**.  It is used to check the forecasting performance.  No matter how many parameters are estimated with the estimation sample, each method under consideration can be evaluated with the use of the “new” observation contained in the hold-out sample.    
+]
+
+.pull-right[
+![](img/image6.jpg)
+]
+
+---
+## Step 1: Time Series Data Sampling
+
+.pull-left[
+A good practice in forecasting is to split the original data set into a training and a hold-out data sets. In this example we will use the last 12 months for hold-out and the rest for training.
+
+First, an extra column called *Type* indicating training or hold-out will be created by using `mutate()` of **dplyr** package.  It will be extremely useful for subsequent data visualisation.
+
+```{r}
+vietnam_ts <- tsbl_longer %>%
+  filter(Country == "Vietnam") %>% 
+  mutate(Type = if_else(
+    `Month-Year` >= "2019-01-01", 
+    "Hold-out", "Training"))
+```
+]
+
+--
+.pull-right[
+Next, a training data set is extracted from the original data set by using `filter()` of **dplyr** package.
+
+```{r}
+vietnam_train <- vietnam_ts %>%
+  filter(`Month-Year` < "2019-01-01")
+```
+]
+
+---
+### Step 2: Exploratory Data Analysis (EDA): Time Series Data
+
+Before fitting forecasting models, it is a good practice to analysis the time series data by using EDA methods.
+
+.pull-left[
+```{r fig.height=6}
+tsbl_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  model(stl = STL(Arrivals)) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+--
+.pull-right[
+```{r fig.height=6}
+tsbl_longer %>%
+  filter(`Country` == "Australia") %>%
+  model(stl = STL(Arrivals)) %>%
+  components() %>%
+  autoplot()
+```
+]
+
+---
+## Step 3: Fitting Exponential Smoothing State Space (ETS) Models: fable methods
+
+.pull-left[
+In fable, Exponential Smoothing State Space Models are supported by [`ETS()`](https://fable.tidyverts.org/reference/ETS.html). The combinations are specified through the formula:
 
 ```{r eval=FALSE}
 ETS(y ~ error(c("A", "M")) 
@@ -253,55 +393,95 @@ ETS(y ~ error(c("A", "M"))
 ]
 
 ---
-
-
-
----
-### Simple exponential smoothing
+### Fitting a simple exponential smoothing (SES)
 
 .pull-left[
 ```{r}
-Vietnam_ses <- tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
+fit_ses <- vietnam_train %>%
   model(ETS(Arrivals ~ error("A") 
             + trend("N") 
             + season("N")))
-Vietnam_ses %>% report()
+fit_ses
+```
+]
+
+Notice that `model()` of fable package is used to estimate the ETS model on a particular dataset, and returns a **mable** (model table) object.
+
+A mable contains a row for each time series (uniquely identified by the key variables), and a column for each model specification.  A model is contained within the cells of each model column.
+
+---
+### Examine Model Assumptions
+
+.pull-left[
+Next, `gg_tsresiduals()` of **feasts** package is used to check the model assumptions with residuals plots.
+
+```{r fig.height=7}
+gg_tsresiduals(fit_ses)
+```
+]
+
+---
+### The model details
+
+.pull-left[
+[`report()`](https://fabletools.tidyverts.org/reference/report.html) of fabletools is be used to reveal the model details.
+
+```{r}
+fit_ses %>%
+  report()
+```
+]
+
+---
+### Fitting ETS Methods with Trend: Holt’s Linear
+
+.pull-left[
+#### Trend methods
+```{r}
+vietnam_H <- vietnam_train %>%
+  model(`Holt's method` = 
+          ETS(Arrivals ~ error("A") +
+                trend("A") + 
+                season("N")))
+vietnam_H %>% report()
+```
+]
+
+--
+.pull-right[
+#### Damped Trend methods
+```{r}
+vietnam_HAd <- vietnam_train %>%
+  model(`Holt's method` = 
+          ETS(Arrivals ~ error("A") +
+                trend("Ad") + 
+                season("N")))
+vietnam_HAd %>% report()
+```
+]
+
+---
+### Checking for results
+
+Check the model assumptions with residuals plots.
+
+.pull-left[
+```{r fig.height=7}
+gg_tsresiduals(vietnam_H)
 ```
 ]
 
 .pull-right[
-Check the model assumptions with residuals plots.
-
 ```{r fig.height=7}
-gg_tsresiduals(Vietnam_ses)
+gg_tsresiduals(vietnam_HAd)
 ```
 ]
 
-
 ---
-### Simple exponential smoothing
-
-Then, forecast() is used to forecast next 12 months values.
+### Fitting ETS Methods with Season: Holt-Winters
 
 ```{r}
-Vietnam_ses_fc <- Vietnam_ses %>%
-  forecast(h = "1 year")
-Vietnam_ses_fc
-```
-
-
-
-
-
-
-
----
-### Holt’s Linear Method
-
-```{r}
-Vietnam_WH <- tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
+Vietnam_WH <- vietnam_train %>%
   model(
     Additive = ETS(Arrivals ~ error("A") 
                    + trend("A") 
@@ -313,175 +493,361 @@ Vietnam_WH <- tsbl_longer %>%
 
 Vietnam_WH %>% report()
 ```
+
+---
+### Fitting multiple ETS Models
+
+.pull-left[
+```{r}
+fit_ETS <- vietnam_train %>%
+  model(`SES` = ETS(Arrivals ~ error("A") + 
+                      trend("N") + 
+                      season("N")),
+        `Holt`= ETS(Arrivals ~ error("A") +
+                      trend("A") +
+                      season("N")),
+        `damped Holt` = 
+          ETS(Arrivals ~ error("A") +
+                trend("Ad") + 
+                season("N")),
+        `WH_A` = ETS(
+          Arrivals ~ error("A") + 
+            trend("A") + 
+            season("A")),
+        `WH_M` = ETS(Arrivals ~ error("M") 
+                         + trend("A") 
+                         + season("M"))
+  )
+
+```
 ]
 
 ---
-### Auto ETS
+### The model coefficient
+
+[`tidy()`]() of fabletools is be used to extract model coefficients from a mable.
 
 ```{r}
-Vietnam_autoETS <- tsbl_longer %>%
-  filter(Country == "Vietnam") %>%
-  model(ETS(Arrivals))
-
-Vietnam_autoETS %>% report()
+fit_ETS %>%
+  tidy()
 ```
 
 ---
-### 
+### Step 4: Model Comparison
 
-Check the model assumptions with residuals plots.
+`glance()` of fabletool
+
+```{r}
+fit_ETS %>% 
+  report()
+```
+
+---
+### Step 5: Forecasting future values
+
+To forecast the future values, `forecast()` of fable will be used.  Notice that the forecast period is 12 months.
+
+```{r fig.height=3}
+fit_ETS %>%
+  forecast(h = "12 months") %>%
+  autoplot(vietnam_ts, 
+           level = NULL)
+
+```
+
+---
+### Fitting ETS Automatically
+
+```{r}
+fit_autoETS <- vietnam_train %>%
+  model(ETS(Arrivals))
+fit_autoETS %>% report()
+```
+
+---
+### Fitting Fitting ETS Automatically
+
+Next, we will check the model assumptions with residuals plots by using `gg_tsresiduals()` of **feasts** package
 
 .pull-left[
 ```{r fig.height=7}
-gg_tsresiduals(Vietnam_autoETS)
+gg_tsresiduals(fit_autoETS)
 ```
 ]
 
-
 ---
-### Auto ETS
+### Forecast the future values
 
-```{r}
-UK_autoETS <- tsbl_longer %>%
-  filter(Country == "United Kingdom") %>%
-  model(ETS(Arrivals ~ season("M")))
+In the code chunk below, `forecast()` of **fable** package is used to forecast the future values. Then, `autoplot()` of **feasts** package is used to see the training data along with the forecast values.   
 
-UK_autoETS
+```{r fig.height=3}
+fit_autoETS %>%
+  forecast(h = "12 months") %>%
+  autoplot(vietnam_train)
 ```
 
 ---
-## Time Series Forecasting: modeltime methods
+### Visualising AutoETS model with ggplot2
+
+There are time that we are interested to visualise relationship between training data and fit data and forecasted values versus the hold-out data.
+
+```{r echo=FALSE}
+fc_autoETS <- fit_autoETS %>%
+  forecast(h = "12 months")
+
+vietnam_ts %>%
+  ggplot(aes(x=`Month`, 
+             y=Arrivals)) +
+  autolayer(fc_autoETS, 
+            alpha = 0.6) +
+  geom_line(aes(
+    color = Type), 
+    alpha = 0.8) + 
+  geom_line(aes(
+    y = .mean, 
+    colour = "Forecast"), 
+    data = fc_autoETS) +
+  geom_line(aes(
+    y = .fitted, 
+    colour = "Fitted"), 
+    data = augment(fit_autoETS))
+```
+
+---
+### Visualising AutoETS model with ggplot2
+
+Code chunk below is used to create the data visualisation in previous slide.
+
+```{r eval=FALSE}
+fc_autoETS <- fit_autoETS %>%
+  forecast(h = "12 months")
+
+vietnam_ts %>%
+  ggplot(aes(x=`Month`, 
+             y=Arrivals)) +
+  autolayer(fc_autoETS, 
+            alpha = 0.6) +
+  geom_line(aes(
+    color = Type), 
+    alpha = 0.8) + 
+  geom_line(aes(
+    y = .mean, 
+    colour = "Forecast"), 
+    data = fc_autoETS) +
+  geom_line(aes(
+    y = .fitted, 
+    colour = "Fitted"), 
+    data = augment(fit_autoETS))
+```
+
+---
+class: center, middle
+
+# AutoRegressive Integrated Moving Average(ARIMA) Methods for Time Series Forecasting: fable (tidyverts) methods 
+
+---
+### Visualising Autocorrelations: feasts methods
 
 .pull-left[
+**feasts** package provides a very handy function for visualising ACF and PACF of a time series called [`gg_tsdiaply()`](https://feasts.tidyverts.org/reference/gg_tsdisplay.html).
 
-+ Collect data and split into training and test sets
-+ Create & Fit Multiple Models
-+ Add fitted models to a Model Table
-+ Calibrate the models to a testing set.
-+ Perform Testing Set Forecast & Accuracy Evaluation
-+ Refit the models to Full Dataset & Forecast Forward
+
+```{r fig.height=6}
+vietnam_train %>%
+  gg_tsdisplay(plot_type='partial')
+```
 ]
 
 ---
-### Step 1: Data sampling
+### Visualising Autocorrelations: feasts methods
 
 .pull-left[
-Extracting data for model calibration.
-
-```{r}
-vietnam <- tbl_longer %>%
-  filter(Country == "Vietnam" &
-         `Month-Year` < "2019-01-01")
-vietnam_holdup <- tbl_longer %>%
-  filter(Country == "Vietnam" &
-         `Month-Year` >= "2019-01-01")
+```{r fig.height=6}
+tsbl_longer %>%
+  filter(`Country` == "Vietnam") %>%
+  ACF(Arrivals) %>% 
+  autoplot()
 ```
 ]
 
 .pull-right[
-Let’s split the data into training and test sets using `initial_time_split()`
-
-```{r}
-vietnam_splits <- initial_time_split(
-  vietnam, prop = 0.91)
-vietnam_train <- training(vietnam_splits)
-vietnam_test <- testing(vietnam_splits)
+```{r fig.height=6}
+tsbl_longer %>%
+  filter(`Country` == "United Kingdom") %>%
+  ACF(Arrivals) %>% 
+  autoplot()
 ```
 ]
 
+By comparing both ACF plots, it is clear that visitor arrivals from United Kingdom were very seasonal and relatively weaker trend as compare to visitor arrivals from Vietnam.
+
 ---
-### Step 2 - Create & Fit Multiple Models
+### Differencing: fable methods
 
 .pull-left[
-We can easily create dozens of forecasting models by combining modeltime and parsnip. We can also use the workflows interface for adding preprocessing! Your forecasting possibilities are endless. Let’s get a few basic models developed:
-
-Model 1: Exponential Smoothing (Modeltime)
-
-Next, create an Error-Trend-Season (ETS) model using an Exponential Smoothing State Space model. This is accomplished with exp_smoothing().
+#### Trend differencing
 
 ```{r}
-model_fit_ets <- exp_smoothing() %>%
-    set_engine(engine = "ets") %>%
-    fit(Arrivals ~ `Month-Year`, 
-        data = training(vietnam_splits))
+tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  gg_tsdisplay(difference(
+    Arrivals,
+    lag = 1), 
+    plot_type='partial')
 ```
 ]
 
 .pull-right[
-Model 2: Auto ARIMA (Modeltime)
-
-First, we create a basic univariate ARIMA model using “Auto Arima” using arima_reg()
+#### Seasonal differencing
 
 ```{r}
-model_fit_arima <- arima_reg() %>%
-  set_engine(engine = "auto_arima") %>%
-  fit(Arrivals ~ `Month-Year`, 
-      data = training(vietnam_splits))
+tsbl_longer %>%
+  filter(Country == "Vietnam") %>%
+  gg_tsdisplay(difference(
+    Arrivals,
+    difference = 12), 
+    plot_type='partial')
+```
+]
+
+The PACF is suggestive of an AR(1) model; so an initial candidate model is an ARIMA(1,1,0). The ACF suggests an MA(1) model; so an alternative candidate is an ARIMA(0,1,1).
+
+---
+### Fitting ARIMA models manually: fable methods 
+
+```{r}
+fit_arima <- vietnam_train %>%
+  model(
+    arima200 = ARIMA(Arrivals ~ pdq(2,0,0)),
+    sarima210 = ARIMA(Arrivals ~ pdq(2,0,0) + 
+                        PDQ(2,1,0))
+    )
+report(fit_arima)
+```
+
+---
+### Fitting ARIMA models automatically: fable methods
+
+```{r}
+fit_autoARIMA <- vietnam_train %>%
+  model(ARIMA(Arrivals))
+report(fit_autoARIMA)
+```
+
+---
+### Model Comparison
+
+```{r}
+bind_rows(
+    fit_autoARIMA %>% accuracy(),
+    fit_autoETS %>% accuracy(),
+    fit_autoARIMA %>% 
+      forecast(h = 12) %>% 
+      accuracy(vietnam_ts),
+    fit_autoETS %>% 
+      forecast(h = 12) %>% 
+      accuracy(vietnam_ts)) %>%
+  select(-ME, -MPE, -ACF1)
+```
+
+---
+### Forecast Multiple Time Series
+
+In this section, we will perform time series forecasting on multiple time series at one goal.  For the purpose of the hand-on exercise, visitor arrivals from five selected ASEAN countries will be used. 
+
+.pull-left[
+First, `filter()` is used to extract the selected countries' data.
+
+```{r}
+ASEAN <- tsbl_longer %>%
+  filter(Country == "Vietnam" |
+         Country == "Malaysia" |
+         Country == "Indonesia" |
+         Country == "Thailand" |
+         Country == "Philippines")
+```
+]
+
+--
+.pull-right[
+Next, `mutate()` is used to create a new field called Type and populates their respective values.  Lastly, `filter()` is used to extract the training data set and save it as a tsibble object called *ASEAN_train*. 
+
+```{r}
+ASEAN_train <- ASEAN %>%
+  mutate(Type = if_else(
+    `Month-Year` >= "2019-01-01", 
+    "Hold-out", "Training")) %>%
+  filter(Type == "Training")
 ```
 ]
 
 ---
-### Step 3 - Add fitted models to a Model Table
+### Fitting Mulltiple Time Series
+
+In the code chunk below auto ETS and ARIMA models are fitted by using `model()`.
 
 ```{r}
-models_tbl <- modeltime_table(
-  model_fit_ets,
-  model_fit_arima)
-
-models_tbl
+ASEAN_fit <- ASEAN_train %>%
+  model(
+    ets = ETS(Arrivals),
+    arima = ARIMA(Arrivals)
+  )
 ```
 
 ---
-### Step 4 - Calibrate the model to a testing set
+### Examining Models
+
+The `glance()` of **fabletools** provides a one-row summary of each model, and commonly includes descriptions of the model’s fit such as the residual variance and information criteria. 
 
 ```{r}
-calibration_tbl <- models_tbl %>%
-    modeltime_calibrate(new_data = testing(vietnam_splits))
+ASEAN_fit %>%
+  glance()
+```
 
-calibration_tbl
+**Be wary though**, as information criteria (AIC, AICc, BIC) are only comparable between the same model class and only if those models share the same response (after transformations and differencing).
+
+---
+### Extracintg fitted and residual values
+
+The fitted values and residuals from a model can obtained using fitted() and residuals() respectively. Additionally, the augment() function may be more convenient, which provides the original data along with both fitted values and their residuals.
+
+```{r}
+ASEAN_fit %>%
+  augment()
 ```
 
 ---
-### Step 5 - Testing Set Forecast & Accuracy Evaluation
+### Comparing Fit Models
 
-5A - Visualizing the Forecast Test
+In the code chunk below, `accuracy()` is used to compare the performances of the models.
 
 ```{r}
-calibration_tbl %>%
-  modeltime_forecast(
-    new_data = testing(vietnam_splits),
-    actual_data = vietnam) %>%
-  plot_modeltime_forecast(
-    .legend_max_width = 25, 
-    .interactive = TRUE)
+ASEAN_fit %>%
+  accuracy() %>%
+  arrange(Country)
 ```
 
 ---
-### Step 5 - Testing Set Forecast & Accuracy Evaluation
+### Forecast Future Values
 
-5B - Accuracy Metrics
+Forecasts from these models can be produced directly as our specified models do not require any additional data.
 
 ```{r}
-calibration_tbl %>%
-  modeltime_accuracy() %>%
-  table_modeltime_accuracy(
-    .interactive = FALSE)
+ASEAN_fc <- ASEAN_fit %>%
+  forecast(h = "12 months")
 ```
 
 ---
-### Step 6 - Refit to Full Dataset & Forecast Forward
+### Visualising the forecasted values
 
-The final step is to refit the models to the full dataset using modeltime_refit() and forecast them forward.
+In the code chunk below `autoplot()` of feasts package is used to plot the raw and fitted values.
 
-```{r}
-refit_tbl <- calibration_tbl %>%
-    modeltime_refit(data = vietnam)
+```{r fig.height=3.5}
+ASEAN_fc %>%
+  autoplot(ASEAN)
+```
 
-refit_tbl %>%
-    modeltime_forecast(
-      h = "12 months",
-      actual_data = vietnam) %>%
-  plot_modeltime_forecast(
-    .legend_max_width = 25, 
-    .interactive = TRUE)
+```{r echo=FALSE, eval=FALSE}
+library(pagedown)
+pagedown::chrome_print("Topic2.html")
 ```
