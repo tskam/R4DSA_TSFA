@@ -15,7 +15,7 @@ navbar:
       menu:
         - text: "Slides in html format"
           href: "Topic/Topic2.html"
-        - text: "Slides in html format"
+        - text: "Slides in pdf format"
           href: "Topic/Topic2.pdf"
     - text: "Topic 3"
       menu:
