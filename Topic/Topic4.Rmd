@@ -1,0 +1,220 @@
+---
+title: "Tidymodels Approach to Time Series Forecasting: modeltime methods"
+subtitle: ""
+author: "Dr. Kam Tin Seong<br/>Assoc. Professor of Information Systems"
+institute: "School of Computing and Information Systems,<br/>Singapore Management University"
+date: "2022-7-16 (updated: `r Sys.Date()`)"
+output:
+  xaringan::moon_reader:
+    css: [xaringan-themer.css, "css/text.css"]
+    lib_dir: libs
+    nature:
+      ratio: "16:9"
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      beforeInit: "js/macros.js"
+  beamer_presentation: default
+  slidy_presentation: default
+  pdf_document: default
+  ioslides_presentation: default
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(fig.width=9, fig.height=3.5, fig.retina=3, out.width = "100%", cache = FALSE, echo = TRUE, eval = TRUE, message = FALSE,  warning = FALSE, hiline = TRUE)
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer)
+style_duo_accent(
+  primary_color = "#1381B0",
+  secondary_color = "#FF961C",
+  inverse_header_color = "#FFFFFF"
+)
+```
+
+# Content
+
+.large[
+In this topic, we are going to explore the tidymodels approach in time series forecasting.
+
+- import and wrangling time-series data by using appropriate tidyverse methods,
+- visualise and analyse time-series data,
+- calibrate time-series forecasting models by using exponential smoothing and ARIMA techniques, and
+- compare and evaluate the performance of forecasting models.
+]
+
+---
+## Setting Up R Environment
+
+.pull-left[
+For the purpose of this hands-on exercise, the following R packages will be used.
+
+```{r}
+pacman::p_load(tidyverse, tidymodels, 
+               timetk, modeltime)
+```
+
++ [**tidyverse**](https://lubridate.tidyverse.org/) provides a collection of commonly used functions for importing, wrangling and visualising data.  In this hands-on exercise the main packages used are readr, dplyr, tidyr and ggplot2.  
+]
+
+.pull-right[
++ [**modeltime**](https://business-science.github.io/modeltime/index.html) a new time series forecasting package designed to speed up model evaluation, selection, and forecasting. modeltime does this by integrating the [**tidymodels**](https://www.tidymodels.org/) machine learning ecosystem of packages into a streamlined workflow for tidyverse
+forecasting. 
+]
+
+---
+class: center, middle
+
+# Nested Forecasting
+
+![:scale 40%](img/image18.jpg)
+
+.small[
+Source: [Getting Started with Modeltime](https://business-science.github.io/modeltime/articles/nested-forecasting.html)
+]
+
+---
+## The data
+
+.pull-left[
+In this sharing, [**Store Sales - Time Series Forecasting: Use machine learning to predict grocery sales**](https://www.kaggle.com/competitions/store-sales-time-series-forecasting/overview) from Kaggle competition will be used.  For the purpose of this sharing, the main data set used is *train.csv*.  It consists of six columns.  They are:
+
++ *id* contains unique id for each records.
++ *date* gives the sales dates.
++ *store_nbr* identifies the store at which the products are sold.
++ *family* identifies the type of product sold.
++ *sales* gives the total sales for a product family at a particular store at a given date. Fractional values are possible since products can be sold in fractional units (1.5 kg of cheese, for instance, as opposed to 1 bag of chips).
++ *onpromotion* gives the total number of items in a product family that were being promoted at a store at a given date.
+]    
+
+--
+.pull-right[
+For the purpose of this sharing, I will focus of grocery sales instead of all products.  Code chunk below is used to extract grocery sales from *train.csv* and saved the output into an rds file format for subsequent used.
+
+---
+##Step 1: Data Import and Sampling
+In the code chunk below, read_rds() of readr package is used to import both data sets into R environment.
+
+```{r}
+grocery <- read_rds(
+  "data/store_sales/grocery.rds") %>%
+  mutate(across(c(1, 3, 4), 
+                as.factor)) %>%
+  filter(date >= "2015-01-01")
+```
+
+
+```{r}
+stores <- read_csv(
+  "data/store_sales/stores.csv") %>%
+  mutate(across(c(1:5), 
+                as.factor)) %>%
+  select(store_nbr, cluster)
+```
+
+---
+
+```{r}
+grocery_stores <- left_join(
+  x = grocery,
+  y = stores,
+  by = "store_nbr")
+```
+
+---
+### as
+
+```{r}
+grocery_cluster <- grocery_stores %>%
+  group_by(cluster, date) %>%
+  summarise(value = sum(sales)) %>%
+  select(cluster, date, value) %>%
+  set_names(c("id", "date", "value")) %>%
+  ungroup()
+```
+
+---
+### Visualising the data
+
+```{r echo=FALSE}
+grocery_cluster %>%
+  group_by(id) %>%
+  plot_time_series(
+    date, value,
+    .line_size = 0.4,
+    .facet_ncol = 5, 
+    .facet_scales = "free_y",
+    .interactive = FALSE,
+    .smooth_size = 0.4)
+```
+
+---
+### Nested Forecasting Preparation
+
+.pull-left[
+There are two key components that we need to prepare for:
+
++ Nested Data Structure: Most critical to ensure your data is prepared (covered next).
++ Nested Modeltime Workflow: This stage is where we create many models, fit the models to the data, and generate forecasts at scale.
+]
+
+.pull-right[
+![](img/image19.jpg)
+]
+
+---
+### Extending: We'll predict 52 weeks into the future.
+
+By using `extend_timeseries()`
+
+```{r}
+nested_tbl <- grocery_cluster %>%
+  extend_timeseries(
+    .id_var = id,
+    .date_var = date,
+    .length_future = "60 days") 
+```
+
+---
+### Nesting
+
+We'll group by id, and create a future dataset
+
++ that forecasts 52 weeks of extended data and
++ an actual dataset that contains 104 weeks (2-years of data)
+
+```{r}
+nested_tbl <- nested_tbl %>%
+    nest_timeseries(
+      .id_var        = id,
+      .length_future = 60,
+      .length_actual = 17272) 
+```
+
+---
+### 3. Splitting
+
+We'll take the actual data and create splits
+
++ for accuracy and confidence interval estimation of 52 weeks (test)
++ and the rest is training data
+
+```{r}
+nested_tbl <- nested_tbl %>%
+  split_nested_timeseries(
+    .length_test = 60)
+```
+
+---
+## Nested Forecasting with modeltime
+
+.center[
+![:scale 50%](img/image20.jpg)]
+
+---
+### Step 1: Create Tidymodels Workflows
+
+First, we create tidymodels workflows for the various models that you intend to create.
+

@@ -360,8 +360,7 @@ Before fitting forecasting models, it is a good practice to analysis the time se
 
 .pull-left[
 ```{r fig.height=6}
-tsbl_longer %>%
-  filter(`Country` == "Vietnam") %>%
+vietnam_train %>%
   model(stl = STL(Arrivals)) %>%
   components() %>%
   autoplot()
@@ -372,7 +371,7 @@ tsbl_longer %>%
 .pull-right[
 ```{r fig.height=6}
 tsbl_longer %>%
-  filter(`Country` == "Australia") %>%
+  filter(`Country` == "China") %>%
   model(stl = STL(Arrivals)) %>%
   components() %>%
   autoplot()
