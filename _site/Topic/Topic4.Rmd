@@ -1,5 +1,5 @@
 ---
-title: "Tidymodels Approach to Time Series Forecasting: modeltime methods"
+title: "Nested Forecasting Approach and modeltime Methods"
 subtitle: ""
 author: "Dr. Kam Tin Seong<br/>Assoc. Professor of Information Systems"
 institute: "School of Computing and Information Systems,<br/>Singapore Management University"
@@ -36,13 +36,32 @@ style_duo_accent(
 
 # Content
 
-.large[
-In this topic, we are going to explore the tidymodels approach in time series forecasting.
+.vlarge[
++ The motivation 
++ Principles of nested forecasting approach
++ Nested forecasting processes
++ Nested forecasting with modeltime
+]
 
-- import and wrangling time-series data by using appropriate tidyverse methods,
-- visualise and analyse time-series data,
-- calibrate time-series forecasting models by using exponential smoothing and ARIMA techniques, and
-- compare and evaluate the performance of forecasting models.
+---
+## Motivation of Nested Forecasting Approach
+
+.large[
+In real world practice, it is very common a forecaster is required to forecast multiple time series by fitting multiple models.
+]
+
+.center[
+![:scale 65%](img/image21.png)]
+
+---
+class: center, middle
+
+# Nested Forecasting
+
+![:scale 40%](img/image18.jpg)
+
+.small[
+Source: [Getting Started with Modeltime](https://business-science.github.io/modeltime/articles/nested-forecasting.html)
 ]
 
 ---
@@ -65,17 +84,6 @@ forecasting.
 ]
 
 ---
-class: center, middle
-
-# Nested Forecasting
-
-![:scale 40%](img/image18.jpg)
-
-.small[
-Source: [Getting Started with Modeltime](https://business-science.github.io/modeltime/articles/nested-forecasting.html)
-]
-
----
 ## The data
 
 .pull-left[
@@ -93,9 +101,20 @@ In this sharing, [**Store Sales - Time Series Forecasting: Use machine learning 
 .pull-right[
 For the purpose of this sharing, I will focus of grocery sales instead of all products.  Code chunk below is used to extract grocery sales from *train.csv* and saved the output into an rds file format for subsequent used.
 
+```{r eval=FALSE}
+grocery <- read_csv(
+  "data/store_sales/train.csv") %>%
+  filter(family == "GROCERY") %>%
+  write_rds(
+    "data/store_sales/grocery.rds")
+```
+]
+
 ---
-##Step 1: Data Import and Sampling
-In the code chunk below, read_rds() of readr package is used to import both data sets into R environment.
+### Step 1: Data Import and Wrangling
+
+.pull-left[
+In the code chunk below, `read_rds()` of **readr** package is used to import grocery.rds data into R environment. Then, `mutate()`, `across()` and `as.factor()` are used to convert all values in columns 1,3 and 4 into factor data type.
 
 ```{r}
 grocery <- read_rds(
@@ -104,7 +123,11 @@ grocery <- read_rds(
                 as.factor)) %>%
   filter(date >= "2015-01-01")
 ```
+]
 
+--
+.pull-right[
+In the code chunk below, `read_csv()` is used to import *stores.csv* file into R environment.  TThen, `mutate()`, `across()` and `as.factor()` are used to convert values in columns 1to 5 into factor data type.
 
 ```{r}
 stores <- read_csv(
@@ -113,8 +136,13 @@ stores <- read_csv(
                 as.factor)) %>%
   select(store_nbr, cluster)
 ```
+]
 
 ---
+### Data integration and wrangling
+
+.pull-left[
+In the code chunk below, `left_join()` of **dplyr** package is used to join *grocery* and *stores* tibble data frames by using *store_nb*r as unique field. 
 
 ```{r}
 grocery_stores <- left_join(
@@ -122,9 +150,11 @@ grocery_stores <- left_join(
   y = stores,
   by = "store_nbr")
 ```
+]
 
----
-### as
+--
+.pull-right[
+In the code chunk below, a new tibble data frame called *grocery_cluster* is derived by summing sales values by values in cluster and date fields.  
 
 ```{r}
 grocery_cluster <- grocery_stores %>%
@@ -134,11 +164,15 @@ grocery_cluster <- grocery_stores %>%
   set_names(c("id", "date", "value")) %>%
   ungroup()
 ```
+]
 
 ---
-### Visualising the data
+### Visualising the time series data: The code chunk
 
-```{r echo=FALSE}
+.pull-left[
+It is always a good practice to visualise the time series graphically.
+
+```{r eval=FALSE}
 grocery_cluster %>%
   group_by(id) %>%
   plot_time_series(
@@ -149,15 +183,21 @@ grocery_cluster %>%
     .interactive = FALSE,
     .smooth_size = 0.4)
 ```
+]
 
 ---
-### Nested Forecasting Preparation
+### Visualising the time series data: The plot 
+
+![:scale 70%](img/image21.png)
+
+---
+## Preparation for Nested Forecasting
 
 .pull-left[
-There are two key components that we need to prepare for:
+Before fitting the nested forecasting models, there are two key components that we need to prepare for:
 
-+ Nested Data Structure: Most critical to ensure your data is prepared (covered next).
-+ Nested Modeltime Workflow: This stage is where we create many models, fit the models to the data, and generate forecasts at scale.
++ **Nested Data Structure:** Most critical to ensure your data is prepared (covered next).
++ **Nested Modeltime Workflow:** This stage is where we create many models, fit the models to the data, and generate forecasts at scale.
 ]
 
 .pull-right[
@@ -165,9 +205,24 @@ There are two key components that we need to prepare for:
 ]
 
 ---
-### Extending: We'll predict 52 weeks into the future.
+### Step 2: Preparing Nested Time Series Data Frame
 
-By using `extend_timeseries()`
+.pull-left[
+.large[
+There are three major steps in reparing the nested time series data frame.  They are:
+
++ Creating an initial data frame and extending to the future,
+
++ Transforming the tibble data frame into nested modeltime data frame, and 
+
++ Splitting the nested data frame into training and test (hold-out) data sets.
+]]
+
+---
+### **Creating initial data frame and extending to the future**
+
+.pull-left[
+Firstly, we will create a new data table and extend the time frame 60 days into the future by using [`extend_timeseries()`](https://business-science.github.io/modeltime/reference/prep_nested.html) of modeltime.
 
 ```{r}
 nested_tbl <- grocery_cluster %>%
@@ -176,14 +231,17 @@ nested_tbl <- grocery_cluster %>%
     .date_var = date,
     .length_future = "60 days") 
 ```
+]
+
+.pull-right[
+![:scale 40%](img/image22.jpg)
+]
 
 ---
-### Nesting
-
-We'll group by id, and create a future dataset
-
-+ that forecasts 52 weeks of extended data and
-+ an actual dataset that contains 104 weeks (2-years of data)
+### Nesting the tibble data frame
+ 
+.pull-left[
+Next, [`nest_timeseries()`](https://business-science.github.io/modeltime/reference/prep_nested.html) is used to transform the newly created data frame in previous slide into a  nested data frame by grouping the values in the *id* field.
 
 ```{r}
 nested_tbl <- nested_tbl %>%
@@ -193,19 +251,124 @@ nested_tbl <- nested_tbl %>%
       .length_actual = 17272) 
 ```
 
+Notice that the nested data frame consists of three fields namely *id*, *.actual_data* and *.future_data*.]
+
+.pull-right[
+![:scale 55%](img/image23.jpg)
+]
+
 ---
-### 3. Splitting
+### Data sampling
 
-We'll take the actual data and create splits
-
-+ for accuracy and confidence interval estimation of 52 weeks (test)
-+ and the rest is training data
+.pull-left[
+Lastly, `split_nested_timeseries()` is used to split the original data into training and testing (or hold-out) data sets.
 
 ```{r}
 nested_tbl <- nested_tbl %>%
   split_nested_timeseries(
     .length_test = 60)
 ```
+]
+
+.pull-right[
+![](img/image24.jpg)
+]
+
+---
+### Step 3: Creating Tidymodels Workflows
+
+In this step, we will first applying tidymodels approach to create four forecasting models by using [`recipe()`](https://recipes.tidymodels.org/reference/recipe.html) of [**recipe**](https://recipes.tidymodels.org/) package and [`workflow()`](https://workflows.tidymodels.org/reference/workflow.html) of [**workflow**](https://workflows.tidymodels.org/) package. Both packages are member of [**tidymodels**](https://www.tidymodels.org/), a family of R packages specially designed for  modeling and machine learning using [**tidyverse**](https://www.tidyverse.org/) principles.  
+
+.pull-left[
+**Model 1: Exponential Smoothing (Modeltime)**
+
+An Error-Trend-Season (ETS) model by using [`exp_smoothing()`](https://business-science.github.io/modeltime/reference/exp_smoothing.html).
+
+```{r}
+rec_autoETS <- recipe(
+  value ~ date, 
+  extract_nested_train_split(
+    nested_tbl)) 
+
+wflw_autoETS <- workflow() %>%
+  add_model(
+    exp_smoothing() %>% 
+      set_engine("ets")) %>%
+  add_recipe(rec_autoETS)
+```
+]
+
+--
+.pull-right[
+**Model 2: Auto ARIMA (Modeltime)**
+
+An auto ARIMA model by using [`arima_reg()`](https://business-science.github.io/modeltime/reference/arima_reg.html).
+
+```{r}
+rec_autoARIMA <- recipe(
+  value ~ date, 
+  extract_nested_train_split(
+    nested_tbl)) 
+
+wflw_autoARIMA <- workflow() %>%
+  add_model(
+    arima_reg() %>% 
+      set_engine("auto_arima")) %>%
+  add_recipe(rec_autoARIMA)
+```
+]
+
+---
+### Step 3: Creating Tidymodels Workflows (cont')
+.pull-left[
+
+**Model 3: Boosted Auto ARIMA (Modeltime)**
+
+An Boosted auto ARIMA model by using [`arima_boost()`](https://business-science.github.io/modeltime/reference/arima_boost.html). 
+
+```{r}
+rec_xgb <- recipe(
+  value ~ .,
+  extract_nested_train_split(
+    nested_tbl)) %>%
+  step_timeseries_signature(date) %>%
+  step_rm(date) %>%
+  step_zv(all_predictors()) %>%
+  step_dummy(all_nominal_predictors(), 
+             one_hot = TRUE)
+
+wflw_xgb <- workflow() %>%
+  add_model(
+    boost_tree(
+      "regression") %>% 
+      set_engine("xgboost")) %>%
+  add_recipe(rec_xgb)
+
+```
+]
+
+--
+.pull-right[
+**Model 4: prophet (Modeltime)**
+
+A prophet model using [`prophet_reg()`](https://business-science.github.io/modeltime/reference/prophet_reg.html).
+
+```{r}
+rec_prophet <- recipe(
+  value ~ date, 
+  extract_nested_train_split(
+    nested_tbl)) 
+
+wflw_prophet <- workflow() %>%
+  add_model(
+    prophet_reg(
+      "regression", 
+      seasonality_yearly = TRUE) %>%
+      set_engine("prophet")
+    ) %>%
+  add_recipe(rec_prophet)
+```
+]
 
 ---
 ## Nested Forecasting with modeltime
@@ -214,7 +377,235 @@ nested_tbl <- nested_tbl %>%
 ![:scale 50%](img/image20.jpg)]
 
 ---
-### Step 1: Create Tidymodels Workflows
+### Step 4: Fitting Nested Forecasting Models
 
-First, we create tidymodels workflows for the various models that you intend to create.
+.pull-left[
+In this step, [`modeltime_nested_fit()`](https://business-science.github.io/modeltime/reference/modeltime_nested_fit.html) is used to fit the four models we created in Step 3.  Note that the input must be in the form of nested modeltime table (i.e. *nested_tbl*) 
 
+```{r}
+nested_tbl <- modeltime_nested_fit(
+  nested_data = nested_tbl,
+  wflw_autoETS,
+  wflw_autoARIMA,
+  wflw_prophet,
+  wflw_xgb)
+```
+]
+
+---
+### The nested modeltime data frame
+
+The output object *nested_tbl* is a nested modetime data frame.  
+
+![:scale 65%](img/image25a.jpg)
+
+--
+
+Click on the table icon of the first row under *.modeltime_tables* field, its corresponding modelling data frame appears.
+
+![:scale 70%](img/image25b.jpg)
+
+Notice that the four models were fitted by using the test data set.
+
+---
+### Step 5: Model Accuracy Assessment with Test Logged Attributes
+
+.pull-left[
+Before we go ahead to select the best model, it is a good practice to compare the performance of the models by using accuracy matrices.  
+
+```{r eval=FALSE}
+nested_tbl %>%
+  extract_nested_test_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+
+What can we learn fro mthe code chunk above?
+
++ [`extract_nested_test_accuracy()`](https://business-science.github.io/modeltime/reference/log_extractors.html) is used to extract the accuracy matrices by using the test data set.
+
++ [`table_modeltime_accuracy()`](https://business-science.github.io/modeltime/reference/table_modeltime_accuracy.html) is used to display the accuracy report in tabular form.
+]
+
+.pull-right[
+Note that `.interactive` argument returns interactive or static tables. If TRUE, returns `reactable` table. If FALSE, returns static `gt` table.
+]
+
+---
+### Step 5: Model Accuracy Assessment with Test Logged Attributes
+
+```{r echo=FALSE}
+nested_tbl %>%
+  extract_nested_test_accuracy() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+
+---
+### Step 6: Extracting and Visualising Nested Test Forecast
+
+.pull-left[
+In this step, [`extract_nested_test_forecast()`](https://business-science.github.io/modeltime/reference/log_extractors.html) is used to extract the forecasted values from the nested modeltime data frame and [`plot_modeltime_forecast()`](https://business-science.github.io/modeltime/reference/plot_modeltime_forecast.html) is used to plot the forecasted values graphically.
+
+```{r eval=FALSE}
+nested_tbl %>%
+  extract_nested_test_forecast() %>%
+  group_by(id) %>%
+  plot_modeltime_forecast(
+    .facet_ncol = 4,
+    .interactive = FALSE)
+```
+]
+
+---
+### Static multiple small line graphs
+
+![:scale 70%](img/image26.png)
+
+---
+### Step 7: Extracting nested error logs
+
+.pull-left[
+Before going ahead to choose the best model, it is always a good practice to examine if there is any error in the model.  This task can be accomplished by using [`extract_nested_error_report()`](https://business-science.github.io/modeltime/reference/log_extractors.html).   
+
+```{r}
+nested_tbl %>%
+  extract_nested_error_report()
+```
+]
+
+---
+### Step 8: Selecting the Best Model
+
+.pull-left[
+Now we are ready to select the best model by using [`modeltime_nested_select_best()`](https://business-science.github.io/modeltime/reference/modeltime_nested_select_best.html).
+
+```{r}
+best_nested_tbl <- nested_tbl %>%
+  modeltime_nested_select_best(
+    metric = "rmse",
+    minimize = TRUE,
+    filter_test_forecasts = TRUE)
+```
+
+Note that to select the best forecasting models, the `minimize` argument must set to *TRUE*.
+]
+
+---
+### Extracting and displaying nested best model report
+
+.pull-left[
+After selecting the best model for each time series, we can display the best model report by using [`extract_nested_best_model_report()`](https://business-science.github.io/modeltime/reference/log_extractors.html).
+
+```{r eval=FALSE}
+best_nested_tbl %>%
+  extract_nested_best_model_report() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+]
+
+---
+### Extracting and displaying nested best model report
+
+```{r echo=FALSE}
+best_nested_tbl %>%
+  extract_nested_best_model_report() %>%
+  table_modeltime_accuracy(
+    .interactive = FALSE)
+```
+
+---
+### Extracting and Visualising Nested Best Test Forecasts
+
+.pull-left[
+We can also plot multiple small line graphs by using `plot_modeltime_forecast()`.
+
+```{r eval=FALSE}
+best_nested_tbl %>%
+  extract_nested_test_forecast() %>%
+  group_by(id) %>%
+  plot_modeltime_forecast(
+    .facet_ncol = 4,
+    .interactive = FALSE)
+```
+]
+
+---
+### Extracting and Visualising Nested Best Test Forecasts
+
+![:scale 80%](img/image27.png)
+
+---
+### Step 9: Refitting and forecast forward
+
+.pull-left[
+The last step of the forecasting process is to refit the best models with the full data set and forecast to the future by using [`modeltime_nested_refit()`](https://business-science.github.io/modeltime/reference/modeltime_nested_refit.html). 
+
+```{r}
+nested_refit_tbl <- best_nested_tbl %>%
+  modeltime_nested_refit(
+    control = control_nested_refit(
+      verbose = TRUE))
+```
+
+Note that `control_nested_refit(verbose = TRUE)` is used to display the modelling results as each model is refit. This is an useful way to follow the nested model fitting process.   
+]
+
+---
+### Extracting and Visualising Nested Future Forecast
+
+.pull-left[
+Similar, `plot_modeltime_forecast()` can be used to visualise the forecasts.  However, instead of `extracted_nested_test_forecast()` is used, `extract_nested_future_forecast()` is used.
+
+```{r eval=FALSE}
+nested_refit_tbl %>%
+  extract_nested_future_forecast() %>%
+  group_by(id) %>%
+  plot_modeltime_forecast(
+    .interactive = FALSE,
+    .facet_ncol = 4)
+```
+]
+
+---
+### Extracting and Visualising Nested Future Forecast
+
+![:scale 80%](img/image28.png)
+
+---
+### Interactive Line Graph of Future Forecast
+
+For effective data discovery, interactive data visualisation can be used as shown in the figure below.     
+
+```{r echo=FALSE, fig.height=7}
+nested_refit_tbl %>%
+  extract_nested_future_forecast() %>%
+  filter(id == 1) %>%
+  plot_modeltime_forecast(
+    .interactive = TRUE,
+    .facet_ncol = 4,
+    .plotly_slider = TRUE)
+```
+
+---
+### Interactive Line Graph of Future Forecast
+
+.pull-left[
+Code chunk below is used to create the interactive line graph shown in previous slide.     
+
+```{r eval=FALSE}
+nested_refit_tbl %>%
+  extract_nested_future_forecast() %>%
+  filter(id == 1) %>%
+  plot_modeltime_forecast(
+    .interactive = TRUE,
+    .facet_ncol = 4,
+    .plotly_slider = TRUE)
+```
+]
+
+```{r echo=FALSE, eval=FALSE}
+library(pagedown)
+pagedown::chrome_print("Topic4.html")
+```

@@ -188,17 +188,7 @@ grocery_cluster %>%
 ---
 ### Visualising the time series data: The plot 
 
-```{r echo=FALSE, fig.height=5}
-grocery_cluster %>%
-  group_by(id) %>%
-  plot_time_series(
-    date, value,
-    .line_size = 0.4,
-    .facet_ncol = 5, 
-    .facet_scales = "free_y",
-    .interactive = FALSE,
-    .smooth_size = 0.4)
-```
+![:scale 70%](img/image21.png)
 
 ---
 ## Preparation for Nested Forecasting
@@ -470,60 +460,7 @@ nested_tbl %>%
 ---
 ### Static multiple small line graphs
 
-```{r echo=FALSE, fig.height=6}
-nested_tbl %>%
-  extract_nested_test_forecast() %>%
-  group_by(id) %>%
-  plot_modeltime_forecast(
-    .facet_ncol = 4,
-    .interactive = FALSE)
-```
-
----
-### Interactive multiple small line graphs with tralliscopejs
-
-.pull-left[
-```{r eval=FALSE}
-nested_tbl %>%
-  extract_nested_test_forecast() %>%
-  group_by(id) %>%
-  plot_modeltime_forecast(
-    .line_size = 0.4,
-    .facet_ncol = 4,
-    .facet_nrow = 2,
-    .facet_scales = "free_y",
-    .interactive = TRUE,
-    .smooth_size = 0.4,
-    .trelliscope = TRUE,
-    .trelliscope_params = list(
-      width = 640,
-      height = 480,
-      path= "trellis4/")
-    )
-```
-]
-
----
-### Interactive multiple small line graphs with tralliscopejs
-
-```{r echo=FALSE}
-nested_tbl %>%
-  extract_nested_test_forecast() %>%
-  group_by(id) %>%
-  plot_modeltime_forecast(
-    .line_size = 0.4,
-    .facet_ncol = 4,
-    .facet_nrow = 2,
-    .facet_scales = "free_y",
-    .interactive = TRUE,
-    .smooth_size = 0.4,
-    .trelliscope = TRUE,
-    .trelliscope_params = list(
-      width = 640,
-      height = 480,
-      path= "trellis4/")
-    )
-```
+![:scale 70%](img/image26.png)
 
 ---
 ### Step 7: Extracting nested error logs
@@ -597,14 +534,7 @@ best_nested_tbl %>%
 ---
 ### Extracting and Visualising Nested Best Test Forecasts
 
-```{r echo=FALSE, fig.height=5.5}
-best_nested_tbl %>%
-  extract_nested_test_forecast() %>%
-  group_by(id) %>%
-  plot_modeltime_forecast(
-    .facet_ncol = 4,
-    .interactive = FALSE)
-```
+![:scale 80%](img/image27.png)
 
 ---
 ### Step 9: Refitting and forecast forward
@@ -635,27 +565,20 @@ nested_refit_tbl %>%
   plot_modeltime_forecast(
     .interactive = FALSE,
     .facet_ncol = 4)
-
 ```
 ]
 
 ---
 ### Extracting and Visualising Nested Future Forecast
 
-```{r echo=FALSE, fig.height=5.5}
-nested_refit_tbl %>%
-  extract_nested_future_forecast() %>% #<<
-  group_by(id) %>%
-  plot_modeltime_forecast(
-    .interactive = FALSE,
-    .facet_ncol = 4)
-
-```
+![:scale 80%](img/image28.png)
 
 ---
 ### Interactive Line Graph of Future Forecast
 
-```{r fig.height=5}
+For effective data discovery, interactive data visualisation can be used as shown in the figure below.     
+
+```{r echo=FALSE, fig.height=7}
 nested_refit_tbl %>%
   extract_nested_future_forecast() %>%
   filter(id == 1) %>%
@@ -665,6 +588,22 @@ nested_refit_tbl %>%
     .plotly_slider = TRUE)
 ```
 
+---
+### Interactive Line Graph of Future Forecast
+
+.pull-left[
+Code chunk below is used to create the interactive line graph shown in previous slide.     
+
+```{r eval=FALSE}
+nested_refit_tbl %>%
+  extract_nested_future_forecast() %>%
+  filter(id == 1) %>%
+  plot_modeltime_forecast(
+    .interactive = TRUE,
+    .facet_ncol = 4,
+    .plotly_slider = TRUE)
+```
+]
 
 ```{r echo=FALSE, eval=FALSE}
 library(pagedown)

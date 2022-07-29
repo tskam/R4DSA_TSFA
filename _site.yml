@@ -21,8 +21,14 @@ navbar:
       menu:
         - text: "Slides in html format"
           href: "Topic/Topic3.html"
-        - text: "Slides in html format"
+        - text: "Slides in pdf format"
           href: "Topic/Topic3.pdf"
+    - text: "Topic 4"
+      menu:
+        - text: "Slides in html format"
+          href: "Topic/Topic4.html"
+        - text: "Slides in pdf format"
+          href: "Topic/Topic4.pdf"
   right:
     - text: "Home"
       href: index.html
