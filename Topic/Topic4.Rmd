@@ -371,6 +371,36 @@ wflw_prophet <- workflow() %>%
 ]
 
 ---
+### Prophet
+
+[**Prophet**](https://facebook.github.io/prophet/) is a procedure for forecasting time series data based on an additive model where non-linear trends are fit with yearly, weekly, and daily seasonality, plus holiday effects. The general formula is defined as follow:
+
+![](img/image29.png)
+
+It works best with time series that have strong seasonal effects and several seasons of historical data. Prophet is robust to missing data and shifts in the trend, and typically handles outliers well.
+
+.small[
+Source: [Forecasting at Scale](https://peerj.com/preprints/3190/)
+]
+
+---
+### XGBoost forecasting algorithm
+
+**XGBoost(Extreme Gradient Boosting)** is an implementation of the gradient boosting ensemble algorithm for classification and regression. Time series datasets can be transformed into supervised learning using a sliding-window representation. 
+
+![:scale 70%](img/image30.png)
+
+.small[
+Reference: [XGBOOST AS A TIME-SERIES
+FORECASTING TOOL](https://filip-wojcik.com/talks/xgboost_forecasting_eng.pdf)
+]
+
+---
+### What is so special of XGBoost?
+
+![](img/image31.jpg)
+
+---
 ## Nested Forecasting with modeltime
 
 .center[
